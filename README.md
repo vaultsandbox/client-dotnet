@@ -143,10 +143,10 @@ if (validation is not null && !validation.Passed)
     }
 }
 
-// Or check individual results. Statuses can vary based on the sending source.
+// Or check individual results. Results can vary based on the sending source.
 if (email.AuthResults?.Spf is not null)
 {
-    Assert.IsTrue(Enum.IsDefined(email.AuthResults.Spf.Status));
+    Assert.IsTrue(Enum.IsDefined(email.AuthResults.Spf.Result));
 }
 if (email.AuthResults?.Dkim is not null)
 {
@@ -154,7 +154,7 @@ if (email.AuthResults?.Dkim is not null)
 }
 if (email.AuthResults?.Dmarc is not null)
 {
-    Assert.IsTrue(Enum.IsDefined(email.AuthResults.Dmarc.Status));
+    Assert.IsTrue(Enum.IsDefined(email.AuthResults.Dmarc.Result));
 }
 ```
 

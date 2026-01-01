@@ -9,7 +9,7 @@ public sealed record SpfResult
 {
     [JsonPropertyName("result")]
     [JsonConverter(typeof(JsonStringEnumConverter<SpfStatus>))]
-    public SpfStatus Status { get; init; } = SpfStatus.None;
+    public SpfStatus Result { get; init; } = SpfStatus.None;
 
     public string? Domain { get; init; }
     public string? Ip { get; init; }
@@ -37,7 +37,7 @@ public sealed record DkimResult
 {
     [JsonPropertyName("result")]
     [JsonConverter(typeof(JsonStringEnumConverter<DkimStatus>))]
-    public DkimStatus Status { get; init; } = DkimStatus.None;
+    public DkimStatus Result { get; init; } = DkimStatus.None;
 
     public string? Domain { get; init; }
     public string? Selector { get; init; }
@@ -59,7 +59,7 @@ public sealed record DmarcResult
 {
     [JsonPropertyName("result")]
     [JsonConverter(typeof(JsonStringEnumConverter<DmarcStatus>))]
-    public DmarcStatus Status { get; init; } = DmarcStatus.None;
+    public DmarcStatus Result { get; init; } = DmarcStatus.None;
 
     [JsonConverter(typeof(JsonStringEnumConverter<DmarcPolicy>))]
     public DmarcPolicy? Policy { get; init; }
@@ -92,18 +92,6 @@ public sealed record ReverseDnsResult
     public bool Verified { get; init; }
     public string? Ip { get; init; }
     public string? Hostname { get; init; }
-
-    /// <summary>
-    /// Returns the status based on the Verified property.
-    /// </summary>
-    [JsonIgnore]
-    public ReverseDnsStatus Status => Verified ? ReverseDnsStatus.Pass : ReverseDnsStatus.Fail;
-}
-
-public enum ReverseDnsStatus
-{
-    Pass,
-    Fail
 }
 
 /// <summary>
@@ -125,40 +113,40 @@ public sealed record AuthenticationResults
         var failures = new List<string>();
 
         // Check SPF
-        var spfPassed = Spf?.Status == SpfStatus.Pass;
+        var spfPassed = Spf?.Result == SpfStatus.Pass;
         if (Spf is not null && !spfPassed)
         {
             var domain = Spf.Domain is not null ? $" (domain: {Spf.Domain})" : "";
-            failures.Add($"SPF check failed: {Spf.Status}{domain}");
+            failures.Add($"SPF check failed: {Spf.Result}{domain}");
         }
 
         // Check DKIM (at least one signature must pass)
-        var dkimPassed = Dkim?.Any(d => d.Status == DkimStatus.Pass) ?? false;
+        var dkimPassed = Dkim?.Any(d => d.Result == DkimStatus.Pass) ?? false;
         if (Dkim is { Count: > 0 } && !dkimPassed)
         {
             var failedDomains = string.Join(", ",
-                Dkim.Where(d => d.Status != DkimStatus.Pass && d.Domain is not null)
+                Dkim.Where(d => d.Result != DkimStatus.Pass && d.Domain is not null)
                     .Select(d => d.Domain));
             var domainInfo = string.IsNullOrEmpty(failedDomains) ? "" : $": {failedDomains}";
             failures.Add($"DKIM signature failed{domainInfo}");
         }
 
         // Check DMARC
-        var dmarcPassed = Dmarc?.Status == DmarcStatus.Pass;
+        var dmarcPassed = Dmarc?.Result == DmarcStatus.Pass;
         if (Dmarc is not null && !dmarcPassed)
         {
             var policy = Dmarc.Policy is not null ? $" (policy: {Dmarc.Policy})" : "";
-            failures.Add($"DMARC policy: {Dmarc.Status}{policy}");
+            failures.Add($"DMARC policy: {Dmarc.Result}{policy}");
         }
 
-        // Check Reverse DNS
-        var reverseDnsPassed = ReverseDns?.Status == ReverseDnsStatus.Pass;
+        // Check Reverse DNS - uses Verified boolean directly
+        var reverseDnsPassed = ReverseDns?.Verified == true;
         if (ReverseDns is not null && !reverseDnsPassed)
         {
             var hostname = ReverseDns.Hostname is not null
                 ? $" (hostname: {ReverseDns.Hostname})"
                 : "";
-            failures.Add($"Reverse DNS check failed: {ReverseDns.Status}{hostname}");
+            failures.Add($"Reverse DNS check failed{hostname}");
         }
 
         return new AuthValidation

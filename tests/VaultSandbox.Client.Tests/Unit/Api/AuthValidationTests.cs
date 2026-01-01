@@ -12,9 +12,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Pass, Domain = "example.com" },
-            Dkim = [new DkimResult { Status = DkimStatus.Pass, Domain = "example.com" }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass },
+            Spf = new SpfResult { Result = SpfStatus.Pass, Domain = "example.com" },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass, Domain = "example.com" }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass },
             ReverseDns = new ReverseDnsResult { Verified = true }
         };
 
@@ -36,9 +36,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Fail, Domain = "example.com" },
-            Dkim = [new DkimResult { Status = DkimStatus.Pass }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass }
+            Spf = new SpfResult { Result = SpfStatus.Fail, Domain = "example.com" },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
         };
 
         // Act
@@ -60,9 +60,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Pass },
-            Dkim = [new DkimResult { Status = DkimStatus.Fail, Domain = "bad.com" }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass }
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim = [new DkimResult { Result = DkimStatus.Fail, Domain = "bad.com" }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
         };
 
         // Act
@@ -84,9 +84,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Pass },
-            Dkim = [new DkimResult { Status = DkimStatus.Pass }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Fail, Policy = DmarcPolicy.Reject }
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Fail, Policy = DmarcPolicy.Reject }
         };
 
         // Act
@@ -108,13 +108,13 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Pass },
+            Spf = new SpfResult { Result = SpfStatus.Pass },
             Dkim =
             [
-                new DkimResult { Status = DkimStatus.Fail, Domain = "bad.com" },
-                new DkimResult { Status = DkimStatus.Pass, Domain = "good.com" }
+                new DkimResult { Result = DkimStatus.Fail, Domain = "bad.com" },
+                new DkimResult { Result = DkimStatus.Pass, Domain = "good.com" }
             ],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass }
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
         };
 
         // Act
@@ -150,9 +150,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Pass },
+            Spf = new SpfResult { Result = SpfStatus.Pass },
             Dkim = [],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass }
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
         };
 
         // Act
@@ -169,9 +169,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Pass },
-            Dkim = [new DkimResult { Status = DkimStatus.Pass }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass },
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass },
             ReverseDns = new ReverseDnsResult { Verified = false, Hostname = "mail.example.com" }
         };
 
@@ -192,9 +192,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Fail, Domain = "example.com" },
-            Dkim = [new DkimResult { Status = DkimStatus.Fail, Domain = "example.com" }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Fail },
+            Spf = new SpfResult { Result = SpfStatus.Fail, Domain = "example.com" },
+            Dkim = [new DkimResult { Result = DkimStatus.Fail, Domain = "example.com" }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Fail },
             ReverseDns = new ReverseDnsResult { Verified = false }
         };
 
@@ -212,9 +212,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.SoftFail },
-            Dkim = [new DkimResult { Status = DkimStatus.Pass }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass }
+            Spf = new SpfResult { Result = SpfStatus.SoftFail },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
         };
 
         // Act
@@ -233,9 +233,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Neutral },
-            Dkim = [new DkimResult { Status = DkimStatus.Pass }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass }
+            Spf = new SpfResult { Result = SpfStatus.Neutral },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
         };
 
         // Act
@@ -251,9 +251,9 @@ public class AuthValidationTests
         // Arrange
         var authResults = new AuthenticationResults
         {
-            Spf = new SpfResult { Status = SpfStatus.Pass },
-            Dkim = [new DkimResult { Status = DkimStatus.None }],
-            Dmarc = new DmarcResult { Status = DmarcStatus.Pass }
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim = [new DkimResult { Result = DkimStatus.None }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
         };
 
         // Act

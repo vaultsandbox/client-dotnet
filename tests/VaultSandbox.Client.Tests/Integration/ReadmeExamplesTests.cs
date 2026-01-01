@@ -123,10 +123,10 @@ public class ReadmeExamplesTests : IntegrationTestBase
                 validation.Failures.Should().NotBeNull();
             }
 
-            // Or check individual results. Statuses can vary based on the sending source.
+            // Or check individual results. Results can vary based on the sending source.
             if (email.AuthResults?.Spf is not null)
             {
-                Enum.IsDefined(email.AuthResults.Spf.Status).Should().BeTrue();
+                Enum.IsDefined(email.AuthResults.Spf.Result).Should().BeTrue();
             }
             if (email.AuthResults?.Dkim is not null)
             {
@@ -134,7 +134,7 @@ public class ReadmeExamplesTests : IntegrationTestBase
             }
             if (email.AuthResults?.Dmarc is not null)
             {
-                Enum.IsDefined(email.AuthResults.Dmarc.Status).Should().BeTrue();
+                Enum.IsDefined(email.AuthResults.Dmarc.Result).Should().BeTrue();
             }
         }
     }
@@ -576,8 +576,8 @@ public class ReadmeExamplesTests : IntegrationTestBase
 
             if (email.AuthResults!.Spf is not null)
             {
-                // SPF status should not be Pass for a spoofed domain
-                email.AuthResults.Spf.Status.Should().NotBe(SpfStatus.Pass,
+                // SPF result should not be Pass for a spoofed domain
+                email.AuthResults.Spf.Result.Should().NotBe(SpfStatus.Pass,
                     "SPF should fail when sending from an IP not in the domain's SPF record");
             }
 
@@ -622,7 +622,7 @@ public class ReadmeExamplesTests : IntegrationTestBase
             // If DKIM results are present, none should be Pass
             if (email.AuthResults.Dkim is { Count: > 0 })
             {
-                email.AuthResults.Dkim.Should().NotContain(d => d.Status == DkimStatus.Pass,
+                email.AuthResults.Dkim.Should().NotContain(d => d.Result == DkimStatus.Pass,
                     "No DKIM signature should pass for unsigned emails");
             }
         }

@@ -4,7 +4,7 @@
     <RootNamespace>VaultSandbox.Client</RootNamespace>
     <AssemblyName>VaultSandbox.Client</AssemblyName>
     <PackageId>VaultSandbox.Client</PackageId>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <Description>Official .NET client for VaultSandbox email testing API with quantum-safe encryption</Description>
     <PackageTags>email;testing;smtp;ci-cd;quantum-safe;vaultsandbox</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
