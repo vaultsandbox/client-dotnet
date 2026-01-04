@@ -1,5 +1,6 @@
 using FluentAssertions;
 using VaultSandbox.Client.Api;
+using VaultSandbox.Client.Crypto;
 using VaultSandbox.Client.Exceptions;
 using Xunit;
 
@@ -7,12 +8,32 @@ namespace VaultSandbox.Client.Tests.Integration;
 
 /// <summary>
 /// Integration tests for import validation.
-/// Tests various invalid import data scenarios.
+/// Tests various invalid import data scenarios per VaultSandbox spec Section 10.
 /// </summary>
 [Collection("Integration")]
 [Trait("Category", "Integration")]
 public class ImportValidationTests : IntegrationTestBase
 {
+    [SkippableFact]
+    public async Task ImportInbox_UnsupportedVersion_ShouldThrowInvalidImportDataException()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var original = await Client.CreateInboxAsync();
+        var export = await original.ExportAsync();
+
+        // Create export with unsupported version (per spec, must be 1)
+        var invalidExport = export with { Version = 2 };
+
+        // Act
+        Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidImportDataException>()
+            .WithMessage("*Unsupported export version*");
+    }
+
     [SkippableFact]
     public async Task ImportInbox_MissingEmailAddress_ShouldThrowInvalidImportDataException()
     {
@@ -54,7 +75,7 @@ public class ImportValidationTests : IntegrationTestBase
     }
 
     [SkippableFact]
-    public async Task ImportInbox_MissingPublicKey_ShouldThrowInvalidImportDataException()
+    public async Task ImportInbox_EmailWithoutAtSymbol_ShouldThrowInvalidImportDataException()
     {
         SkipIfNotConfigured();
 
@@ -62,19 +83,19 @@ public class ImportValidationTests : IntegrationTestBase
         await using var original = await Client.CreateInboxAsync();
         var export = await original.ExportAsync();
 
-        // Create export with null/empty public key
-        var invalidExport = export with { PublicKeyB64 = null! };
+        // Per spec Section 10.1: email must contain exactly one @ character
+        var invalidExport = export with { EmailAddress = "invalid-no-at-symbol" };
 
         // Act
         Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
 
         // Assert
         await act.Should().ThrowAsync<InvalidImportDataException>()
-            .WithMessage("*PublicKeyB64*");
+            .WithMessage("*exactly one '@'*");
     }
 
     [SkippableFact]
-    public async Task ImportInbox_EmptyPublicKey_ShouldThrowInvalidImportDataException()
+    public async Task ImportInbox_EmailWithMultipleAtSymbols_ShouldThrowInvalidImportDataException()
     {
         SkipIfNotConfigured();
 
@@ -82,15 +103,15 @@ public class ImportValidationTests : IntegrationTestBase
         await using var original = await Client.CreateInboxAsync();
         var export = await original.ExportAsync();
 
-        // Create export with empty public key
-        var invalidExport = export with { PublicKeyB64 = "" };
+        // Per spec Section 10.1: email must contain exactly one @ character
+        var invalidExport = export with { EmailAddress = "invalid@@multiple.at" };
 
         // Act
         Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
 
         // Assert
         await act.Should().ThrowAsync<InvalidImportDataException>()
-            .WithMessage("*PublicKeyB64*");
+            .WithMessage("*exactly one '@'*");
     }
 
     [SkippableFact]
@@ -103,14 +124,14 @@ public class ImportValidationTests : IntegrationTestBase
         var export = await original.ExportAsync();
 
         // Create export with null/empty secret key
-        var invalidExport = export with { SecretKeyB64 = null! };
+        var invalidExport = export with { SecretKey = null! };
 
         // Act
         Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
 
         // Assert
         await act.Should().ThrowAsync<InvalidImportDataException>()
-            .WithMessage("*SecretKeyB64*");
+            .WithMessage("*SecretKey*");
     }
 
     [SkippableFact]
@@ -123,18 +144,18 @@ public class ImportValidationTests : IntegrationTestBase
         var export = await original.ExportAsync();
 
         // Create export with empty secret key
-        var invalidExport = export with { SecretKeyB64 = "" };
+        var invalidExport = export with { SecretKey = "" };
 
         // Act
         Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
 
         // Assert
         await act.Should().ThrowAsync<InvalidImportDataException>()
-            .WithMessage("*SecretKeyB64*");
+            .WithMessage("*SecretKey*");
     }
 
     [SkippableFact]
-    public async Task ImportInbox_InvalidBase64PublicKey_ShouldThrowException()
+    public async Task ImportInbox_InvalidBase64SecretKey_ShouldThrowInvalidImportDataException()
     {
         SkipIfNotConfigured();
 
@@ -142,55 +163,15 @@ public class ImportValidationTests : IntegrationTestBase
         await using var original = await Client.CreateInboxAsync();
         var export = await original.ExportAsync();
 
-        // Create export with invalid base64 in public key
-        var invalidExport = export with { PublicKeyB64 = "!!!invalid-base64!!!" };
+        // Per spec Section 2.2: Base64URL MUST reject +, /, or =
+        var invalidExport = export with { SecretKey = "invalid+base64/with=padding" };
 
         // Act
         Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
 
-        // Assert - Should throw FormatException from Base64 decode
-        await act.Should().ThrowAsync<FormatException>();
-    }
-
-    [SkippableFact]
-    public async Task ImportInbox_InvalidBase64SecretKey_ShouldThrowException()
-    {
-        SkipIfNotConfigured();
-
-        // Arrange
-        await using var original = await Client.CreateInboxAsync();
-        var export = await original.ExportAsync();
-
-        // Create export with invalid base64 in secret key
-        var invalidExport = export with { SecretKeyB64 = "!!!invalid-base64!!!" };
-
-        // Act
-        Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
-
-        // Assert - Should throw FormatException from Base64 decode
-        await act.Should().ThrowAsync<FormatException>();
-    }
-
-    [SkippableFact]
-    public async Task ImportInbox_WrongPublicKeyLength_ShouldThrowInvalidImportDataException()
-    {
-        SkipIfNotConfigured();
-
-        // Arrange
-        await using var original = await Client.CreateInboxAsync();
-        var export = await original.ExportAsync();
-
-        // Create export with wrong-sized public key (valid base64 but wrong length)
-        // ML-KEM-768 public key should be 1184 bytes, using shorter key
-        var shortKey = Convert.ToBase64String(new byte[100]);
-        var invalidExport = export with { PublicKeyB64 = shortKey };
-
-        // Act
-        Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
-
-        // Assert
+        // Assert - Should throw InvalidImportDataException wrapping the FormatException
         await act.Should().ThrowAsync<InvalidImportDataException>()
-            .WithMessage("*public key size*");
+            .WithMessage("*Invalid SecretKey encoding*");
     }
 
     [SkippableFact]
@@ -202,10 +183,10 @@ public class ImportValidationTests : IntegrationTestBase
         await using var original = await Client.CreateInboxAsync();
         var export = await original.ExportAsync();
 
-        // Create export with wrong-sized secret key (valid base64 but wrong length)
+        // Create export with wrong-sized secret key (valid base64url but wrong length)
         // ML-KEM-768 secret key should be 2400 bytes, using shorter key
-        var shortKey = Convert.ToBase64String(new byte[100]);
-        var invalidExport = export with { SecretKeyB64 = shortKey };
+        var shortKey = Base64Url.Encode(new byte[100]);
+        var invalidExport = export with { SecretKey = shortKey };
 
         // Act
         Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
@@ -213,6 +194,48 @@ public class ImportValidationTests : IntegrationTestBase
         // Assert
         await act.Should().ThrowAsync<InvalidImportDataException>()
             .WithMessage("*secret key size*");
+    }
+
+    [SkippableFact]
+    public async Task ImportInbox_MissingServerSigPk_ShouldThrowInvalidImportDataException()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var original = await Client.CreateInboxAsync();
+        var export = await original.ExportAsync();
+
+        // Create export with null/empty server sig pk
+        var invalidExport = export with { ServerSigPk = null! };
+
+        // Act
+        Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidImportDataException>()
+            .WithMessage("*ServerSigPk*");
+    }
+
+    [SkippableFact]
+    public async Task ImportInbox_WrongServerSigPkLength_ShouldThrowInvalidImportDataException()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var original = await Client.CreateInboxAsync();
+        var export = await original.ExportAsync();
+
+        // Create export with wrong-sized server sig pk (valid base64url but wrong length)
+        // ML-DSA-65 public key should be 1952 bytes, using shorter key
+        var shortKey = Base64Url.Encode(new byte[100]);
+        var invalidExport = export with { ServerSigPk = shortKey };
+
+        // Act
+        Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidImportDataException>()
+            .WithMessage("*server signature public key size*");
     }
 
     [SkippableFact]
@@ -233,5 +256,43 @@ public class ImportValidationTests : IntegrationTestBase
         // Assert
         await act.Should().ThrowAsync<InvalidImportDataException>()
             .WithMessage("*expired*");
+    }
+
+    [SkippableFact]
+    public async Task ImportInbox_MissingInboxHash_ShouldThrowInvalidImportDataException()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var original = await Client.CreateInboxAsync();
+        var export = await original.ExportAsync();
+
+        // Create export with null/empty inbox hash
+        var invalidExport = export with { InboxHash = null! };
+
+        // Act
+        Func<Task> act = () => Client.ImportInboxAsync(invalidExport);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidImportDataException>()
+            .WithMessage("*InboxHash*");
+    }
+
+    [SkippableFact]
+    public async Task ImportInbox_ValidExport_ShouldSucceed()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var original = await Client.CreateInboxAsync();
+        var export = await original.ExportAsync();
+
+        // Act - import the valid export
+        await using var imported = await Client.ImportInboxAsync(export);
+
+        // Assert
+        imported.EmailAddress.Should().Be(original.EmailAddress);
+        imported.InboxHash.Should().Be(original.InboxHash);
+        imported.ExpiresAt.Should().Be(original.ExpiresAt);
     }
 }

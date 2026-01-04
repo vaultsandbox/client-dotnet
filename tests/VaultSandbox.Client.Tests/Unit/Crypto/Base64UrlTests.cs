@@ -137,4 +137,62 @@ public class Base64UrlTests
         // Assert
         decoded.Should().BeEquivalentTo(data);
     }
+
+    // Per VaultSandbox spec Section 2.2: MUST reject input containing +, /, or =
+
+    [Theory]
+    [InlineData("ab+cd")]
+    [InlineData("+abc")]
+    [InlineData("abc+")]
+    public void Decode_WithPlusCharacter_ShouldThrowFormatException(string invalid)
+    {
+        // Act
+        Action act = () => Base64Url.Decode(invalid);
+
+        // Assert
+        act.Should().Throw<FormatException>()
+            .WithMessage("*must not contain*");
+    }
+
+    [Theory]
+    [InlineData("ab/cd")]
+    [InlineData("/abc")]
+    [InlineData("abc/")]
+    public void Decode_WithSlashCharacter_ShouldThrowFormatException(string invalid)
+    {
+        // Act
+        Action act = () => Base64Url.Decode(invalid);
+
+        // Assert
+        act.Should().Throw<FormatException>()
+            .WithMessage("*must not contain*");
+    }
+
+    [Theory]
+    [InlineData("abc=")]
+    [InlineData("ab==")]
+    [InlineData("abc=def")]
+    public void Decode_WithPaddingCharacter_ShouldThrowFormatException(string invalid)
+    {
+        // Act
+        Action act = () => Base64Url.Decode(invalid);
+
+        // Assert
+        act.Should().Throw<FormatException>()
+            .WithMessage("*must not contain*");
+    }
+
+    [Fact]
+    public void Decode_WithMultipleInvalidCharacters_ShouldThrowFormatException()
+    {
+        // Arrange - standard Base64 that hasn't been converted to Base64URL
+        string standardBase64 = "+/8=";
+
+        // Act
+        Action act = () => Base64Url.Decode(standardBase64);
+
+        // Assert
+        act.Should().Throw<FormatException>()
+            .WithMessage("*must not contain*");
+    }
 }

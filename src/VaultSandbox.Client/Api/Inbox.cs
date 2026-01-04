@@ -68,13 +68,37 @@ internal sealed class Inbox : IInbox
         // Ensure subscribed first - server requires subscription before inbox is active
         await EnsureSubscribedWithDefaultsAsync(ct);
 
-        var encryptedEmails = await _apiClient.GetEmailsAsync(EmailAddress, ct);
+        var encryptedEmails = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: true, ct);
         var emails = new List<Email>(encryptedEmails.Length);
 
         foreach (var encrypted in encryptedEmails)
         {
             var email = await DecryptEmailAsync(encrypted, ct);
             emails.Add(email);
+        }
+
+        return emails;
+    }
+
+    public async Task<IReadOnlyList<EmailMetadata>> GetEmailsMetadataOnlyAsync(CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        // Ensure subscribed first - server requires subscription before inbox is active
+        await EnsureSubscribedWithDefaultsAsync(ct);
+
+        var encryptedEmails = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: false, ct);
+        var emails = new List<EmailMetadata>(encryptedEmails.Length);
+
+        foreach (var encrypted in encryptedEmails)
+        {
+            var metadata = await DecryptMetadataAsync(encrypted.EncryptedMetadata, ct);
+            emails.Add(new EmailMetadata(
+                encrypted.Id,
+                metadata.From,
+                metadata.Subject,
+                encrypted.ReceivedAt ?? metadata.ReceivedAt ?? DateTimeOffset.UtcNow,
+                encrypted.IsRead));
         }
 
         return emails;
@@ -178,14 +202,16 @@ internal sealed class Inbox : IInbox
     {
         ThrowIfDisposed();
 
+        // Per spec Section 9: Public key is NOT included in export
+        // as it can be derived from secret key bytes [1152:2400]
         var export = new InboxExport
         {
+            Version = 1,
             EmailAddress = EmailAddress,
             ExpiresAt = ExpiresAt,
             InboxHash = InboxHash,
             ServerSigPk = _serverSigPk,
-            PublicKeyB64 = Base64Url.Encode(_keyPair.PublicKey),
-            SecretKeyB64 = Base64Url.Encode(_keyPair.SecretKey),
+            SecretKey = Base64Url.Encode(_keyPair.SecretKey),
             ExportedAt = DateTimeOffset.UtcNow
         };
 
@@ -337,28 +363,27 @@ internal sealed class Inbox : IInbox
         }
     }
 
-    private async Task<Email> DecryptEmailAsync(
-        EmailResponse encrypted,
+    private async Task<DecryptedMetadata> DecryptMetadataAsync(
+        EncryptedPayload encryptedMetadata,
         CancellationToken ct = default)
     {
-        // If encryptedParsed is missing, fetch the full email first
-        // (list emails endpoint only returns metadata, not parsed content)
-        if (encrypted.EncryptedParsed is null)
-        {
-            encrypted = await _apiClient.GetEmailAsync(EmailAddress, encrypted.Id, ct);
-        }
-
-        // Decrypt metadata
         var metadataBytes = await _cryptoProvider.DecryptAsync(
-            encrypted.EncryptedMetadata,
+            encryptedMetadata,
             _keyPair.SecretKey,
             _serverSigPk,
             ct);
 
-        var metadata = System.Text.Json.JsonSerializer.Deserialize(
+        return System.Text.Json.JsonSerializer.Deserialize(
             metadataBytes,
             VaultSandboxJsonContext.Default.DecryptedMetadata)
             ?? throw new DecryptionException("Failed to deserialize email metadata");
+    }
+
+    private async Task<Email> DecryptEmailAsync(
+        EmailResponse encrypted,
+        CancellationToken ct = default)
+    {
+        var metadata = await DecryptMetadataAsync(encrypted.EncryptedMetadata, ct);
 
         // Decrypt parsed content
         DecryptedParsed? parsed = null;

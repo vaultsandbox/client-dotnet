@@ -16,17 +16,34 @@ public class InboxExportTests
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
             InboxHash = "hash123abc",
             ServerSigPk = "server-sig-pk-base64",
-            PublicKeyB64 = "public-key-base64",
-            SecretKeyB64 = "secret-key-base64",
+            SecretKey = "secret-key-base64",
             ExportedAt = DateTimeOffset.UtcNow
         };
 
         // Assert
+        export.Version.Should().Be(1);
         export.EmailAddress.Should().Be("test@example.com");
         export.InboxHash.Should().Be("hash123abc");
         export.ServerSigPk.Should().Be("server-sig-pk-base64");
-        export.PublicKeyB64.Should().Be("public-key-base64");
-        export.SecretKeyB64.Should().Be("secret-key-base64");
+        export.SecretKey.Should().Be("secret-key-base64");
+    }
+
+    [Fact]
+    public void InboxExport_Version_ShouldDefaultToOne()
+    {
+        // Arrange & Act
+        var export = new InboxExport
+        {
+            EmailAddress = "test@example.com",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+            InboxHash = "hash123",
+            ServerSigPk = "server-pk",
+            SecretKey = "secret-key",
+            ExportedAt = DateTimeOffset.UtcNow
+        };
+
+        // Assert - version defaults to 1 per spec
+        export.Version.Should().Be(1);
     }
 
     [Fact]
@@ -39,8 +56,7 @@ public class InboxExportTests
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
             InboxHash = "hash123",
             ServerSigPk = "server-pk",
-            PublicKeyB64 = "public-key",
-            SecretKeyB64 = "secret-key",
+            SecretKey = "secret-key",
             ExportedAt = DateTimeOffset.UtcNow
         };
 
@@ -63,8 +79,7 @@ public class InboxExportTests
             ExpiresAt = timestamp,
             InboxHash = "hash123",
             ServerSigPk = "server-pk",
-            PublicKeyB64 = "public-key",
-            SecretKeyB64 = "secret-key",
+            SecretKey = "secret-key",
             ExportedAt = timestamp
         };
 
@@ -74,8 +89,7 @@ public class InboxExportTests
             ExpiresAt = timestamp,
             InboxHash = "hash123",
             ServerSigPk = "server-pk",
-            PublicKeyB64 = "public-key",
-            SecretKeyB64 = "secret-key",
+            SecretKey = "secret-key",
             ExportedAt = timestamp
         };
 
@@ -94,8 +108,7 @@ public class InboxExportTests
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
             InboxHash = "hash123",
             ServerSigPk = "server-pk",
-            PublicKeyB64 = "public-key",
-            SecretKeyB64 = "secret-key",
+            SecretKey = "secret-key",
             ExportedAt = DateTimeOffset.UtcNow
         };
 
@@ -116,8 +129,7 @@ public class InboxExportTests
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
             InboxHash = "hash123",
             ServerSigPk = "server-pk",
-            PublicKeyB64 = "public-key",
-            SecretKeyB64 = "secret-key",
+            SecretKey = "secret-key",
             ExportedAt = DateTimeOffset.UtcNow
         };
 

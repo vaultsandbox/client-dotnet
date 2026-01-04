@@ -129,11 +129,11 @@ public class InboxIntegrationTests : IntegrationTestBase
 
         // Assert
         export.Should().NotBeNull();
+        export.Version.Should().Be(1);
         export.EmailAddress.Should().Be(inbox.EmailAddress);
         export.InboxHash.Should().Be(inbox.InboxHash);
         export.ExpiresAt.Should().Be(inbox.ExpiresAt);
-        export.PublicKeyB64.Should().NotBeNullOrEmpty();
-        export.SecretKeyB64.Should().NotBeNullOrEmpty();
+        export.SecretKey.Should().NotBeNullOrEmpty();
         export.ServerSigPk.Should().NotBeNullOrEmpty();
         export.ExportedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(10));
     }

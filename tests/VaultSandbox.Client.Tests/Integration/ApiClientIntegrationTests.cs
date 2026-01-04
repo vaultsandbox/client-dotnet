@@ -226,7 +226,7 @@ public class ApiClientIntegrationTests : IAsyncLifetime
         _createdInboxes.Add(inbox.EmailAddress);
 
         // Act
-        var emails = await _apiClient.GetEmailsAsync(inbox.EmailAddress);
+        var emails = await _apiClient.GetEmailsAsync(inbox.EmailAddress, includeContent: false);
 
         // Assert
         emails.Should().NotBeNull();

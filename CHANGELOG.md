@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-01-04
+
+### Breaking Changes
+
+- Renamed `InboxExport.PublicKeyB64` and `SecretKeyB64` to `SecretKey` (public key is now derived from secret key)
+- Added explicit JSON property names to `InboxExport` to conform to wire format
+
+### Changed
+
+- Server key comparison now uses constant-time comparison (`CryptographicOperations.FixedTimeEquals`)
+- Decryption flow reorganized to match spec
+
+### Added
+
+- `GetEmailsMetadataOnlyAsync()` method for efficient email listing without body content
+- `EmailMetadata` record with `Id`, `From`, `Subject`, `ReceivedAt`, `IsRead` properties
+- `GetEmailsAsync()` now fetches full email content in a single request (no more N+1 queries)
+- `InboxExport.Version` field (must be 1)
+- Payload version validation before decryption
+- Algorithm suite validation (KEM, Sig, AEAD, KDF) per spec Section 3.1
+- Size validation for ct_kem, nonce, signature, and server_sig_pk per spec Section 5.3
+- Strict Base64URL validation rejecting standard Base64 characters (+, /, =)
+- Email address format validation on import (must contain exactly one @)
+- Server signing public key size validation on import
+
 ## [0.5.1] - 2025-12-31
 
 ### Changed

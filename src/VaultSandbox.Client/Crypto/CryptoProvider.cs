@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using VaultSandbox.Client.Exceptions;
 
@@ -5,10 +6,23 @@ namespace VaultSandbox.Client.Crypto;
 
 /// <summary>
 /// Composite cryptographic provider implementing the full decryption flow.
+/// Conforms to VaultSandbox spec Sections 5, 7, and 8.
 /// </summary>
 internal sealed class CryptoProvider : ICryptoProvider
 {
     private const string Context = "vaultsandbox:email:v1";
+
+    // Per spec Section 3.1: Required algorithm suite
+    private const string ExpectedKem = "ML-KEM-768";
+    private const string ExpectedSig = "ML-DSA-65";
+    private const string ExpectedAead = "AES-256-GCM";
+    private const string ExpectedKdf = "HKDF-SHA-512";
+
+    // Per spec Section 5.3 and Appendix B: Size constraints
+    private const int CtKemSize = 1088;
+    private const int NonceSize = 12;
+    private const int SignatureSize = 3309;
+    private const int ServerSigPkSize = 1952;
 
     private readonly MlKemService _mlKemService;
     private readonly MlDsaService _mlDsaService;
@@ -43,21 +57,42 @@ internal sealed class CryptoProvider : ICryptoProvider
 
     /// <inheritdoc />
     /// <remarks>
-    /// Decryption flow:
-    /// 1. VALIDATE SERVER SIGNING KEY (security-critical - must be FIRST)
-    /// 2. VERIFY SIGNATURE
-    /// 3. KEM decapsulation
-    /// 4. HKDF key derivation
-    /// 5. AES-GCM decryption
+    /// Decryption flow per spec Section 8.1:
+    /// 1. Parse payload (done by caller)
+    /// 2. Validate version
+    /// 3. Validate algorithms
+    /// 4. Validate sizes
+    /// 5. Verify server key
+    /// 6. Verify signature (BEFORE decryption)
+    /// 7. Decapsulate
+    /// 8. Derive AES key
+    /// 9. Decrypt
     /// </remarks>
     public byte[] Decrypt(EncryptedPayload payload, ReadOnlySpan<byte> secretKey, string expectedServerSigPk)
     {
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 0: VALIDATE SERVER SIGNING KEY (MUST BE FIRST - SECURITY CRITICAL)
+        // STEP 2: VALIDATE VERSION (per spec Section 8.1)
+        // ═══════════════════════════════════════════════════════════════════
+        if (payload.Version != 1)
+        {
+            throw new DecryptionException($"Unsupported payload version: {payload.Version} (expected 1)");
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 3: VALIDATE ALGORITHMS (per spec Section 8.1)
+        // ═══════════════════════════════════════════════════════════════════
+        ValidateAlgorithms(payload.Algorithms);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 5: VERIFY SERVER KEY (SECURITY CRITICAL - uses constant-time comparison)
         // Prevents key substitution attacks where an attacker replaces the
         // server's signing key with their own.
+        // Per spec Section 8.2: MUST use constant-time comparison.
         // ═══════════════════════════════════════════════════════════════════
-        if (!string.Equals(payload.ServerSigPk, expectedServerSigPk, StringComparison.Ordinal))
+        byte[] expectedServerSigPkBytes = Base64Url.Decode(expectedServerSigPk);
+        byte[] payloadServerSigPkBytes = Base64Url.Decode(payload.ServerSigPk);
+
+        if (!CryptographicOperations.FixedTimeEquals(expectedServerSigPkBytes, payloadServerSigPkBytes))
         {
             throw new ServerKeyMismatchException(expectedServerSigPk, payload.ServerSigPk);
         }
@@ -68,26 +103,32 @@ internal sealed class CryptoProvider : ICryptoProvider
         byte[] aad = Base64Url.Decode(payload.Aad);
         byte[] ciphertext = Base64Url.Decode(payload.Ciphertext);
         byte[] signature = Base64Url.Decode(payload.Signature);
-        byte[] serverSigPk = Base64Url.Decode(payload.ServerSigPk);
+        byte[] serverSigPk = payloadServerSigPkBytes;
 
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 1: VERIFY SIGNATURE (SECURITY CRITICAL)
+        // STEP 4: VALIDATE SIZES (per spec Section 5.3)
+        // ═══════════════════════════════════════════════════════════════════
+        ValidateSizes(ctKem, nonce, signature, serverSigPk);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 6: VERIFY SIGNATURE (SECURITY CRITICAL - BEFORE decryption)
+        // Per spec Section 8.2: Signature verification MUST occur before decryption.
         // ═══════════════════════════════════════════════════════════════════
         byte[] transcript = BuildTranscript(payload, ctKem, nonce, aad, ciphertext, serverSigPk);
         _mlDsaService.VerifyOrThrow(signature, transcript, serverSigPk);
 
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 2: KEM DECAPSULATION
+        // STEP 7: KEM DECAPSULATION
         // ═══════════════════════════════════════════════════════════════════
         byte[] sharedSecret = _mlKemService.Decapsulate(ctKem, secretKey);
 
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 3: KEY DERIVATION (HKDF-SHA-512)
+        // STEP 8: KEY DERIVATION (HKDF-SHA-512)
         // ═══════════════════════════════════════════════════════════════════
         byte[] aesKey = _hkdfService.DeriveKey(sharedSecret, ctKem, aad);
 
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 4: AES-256-GCM DECRYPTION
+        // STEP 9: AES-256-GCM DECRYPTION
         // ═══════════════════════════════════════════════════════════════════
         return _aesGcmService.Decrypt(aesKey, nonce, ciphertext, aad);
     }
@@ -155,5 +196,54 @@ internal sealed class CryptoProvider : ICryptoProvider
         serverSigPk.CopyTo(transcript.AsSpan(offset));
 
         return transcript;
+    }
+
+    /// <summary>
+    /// Validates that all algorithm identifiers match expected values.
+    /// Per spec Section 3.1 and 8.1: Implementations MUST reject payloads with different algorithms.
+    /// </summary>
+    private static void ValidateAlgorithms(AlgorithmSuite algs)
+    {
+        if (algs.Kem != ExpectedKem)
+            throw new DecryptionException(
+                $"Unsupported KEM algorithm: {algs.Kem} (expected {ExpectedKem})");
+
+        if (algs.Sig != ExpectedSig)
+            throw new DecryptionException(
+                $"Unsupported signature algorithm: {algs.Sig} (expected {ExpectedSig})");
+
+        if (algs.Aead != ExpectedAead)
+            throw new DecryptionException(
+                $"Unsupported AEAD algorithm: {algs.Aead} (expected {ExpectedAead})");
+
+        if (algs.Kdf != ExpectedKdf)
+            throw new DecryptionException(
+                $"Unsupported KDF algorithm: {algs.Kdf} (expected {ExpectedKdf})");
+    }
+
+    /// <summary>
+    /// Validates decoded field sizes per spec Section 5.3.
+    /// </summary>
+    private static void ValidateSizes(
+        ReadOnlySpan<byte> ctKem,
+        ReadOnlySpan<byte> nonce,
+        ReadOnlySpan<byte> signature,
+        ReadOnlySpan<byte> serverSigPk)
+    {
+        if (ctKem.Length != CtKemSize)
+            throw new DecryptionException(
+                $"Invalid ct_kem size: {ctKem.Length} bytes (expected {CtKemSize})");
+
+        if (nonce.Length != NonceSize)
+            throw new DecryptionException(
+                $"Invalid nonce size: {nonce.Length} bytes (expected {NonceSize})");
+
+        if (signature.Length != SignatureSize)
+            throw new DecryptionException(
+                $"Invalid signature size: {signature.Length} bytes (expected {SignatureSize})");
+
+        if (serverSigPk.Length != ServerSigPkSize)
+            throw new DecryptionException(
+                $"Invalid server_sig_pk size: {serverSigPk.Length} bytes (expected {ServerSigPkSize})");
     }
 }

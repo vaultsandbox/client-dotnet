@@ -26,9 +26,14 @@ public interface IInbox : IAsyncDisposable
     bool IsDisposed { get; }
 
     /// <summary>
-    /// Gets all emails in the inbox.
+    /// Gets all emails in the inbox with full content.
     /// </summary>
     Task<IReadOnlyList<Email>> GetEmailsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets all emails in the inbox with metadata only (no body content).
+    /// </summary>
+    Task<IReadOnlyList<EmailMetadata>> GetEmailsMetadataOnlyAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Gets a specific email by ID.

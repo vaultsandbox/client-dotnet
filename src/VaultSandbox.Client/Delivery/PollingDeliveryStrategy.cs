@@ -94,8 +94,8 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
                     state.LastEmailsHash = syncStatus.EmailsHash;
                     currentBackoff = initialIntervalMs; // Reset backoff on change
 
-                    // Fetch new emails
-                    var emails = await _apiClient.GetEmailsAsync(subscription.EmailAddress, ct);
+                    // Fetch new emails (metadata only since we just need IDs)
+                    var emails = await _apiClient.GetEmailsAsync(subscription.EmailAddress, includeContent: false, ct);
 
                     foreach (var email in emails)
                     {

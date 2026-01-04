@@ -40,7 +40,7 @@ internal interface IVaultSandboxApiClient : IDisposable
     /// <summary>
     /// Gets all emails in an inbox.
     /// </summary>
-    Task<EmailResponse[]> GetEmailsAsync(string emailAddress, CancellationToken ct = default);
+    Task<EmailResponse[]> GetEmailsAsync(string emailAddress, bool includeContent, CancellationToken ct = default);
 
     /// <summary>
     /// Gets a specific email by ID.

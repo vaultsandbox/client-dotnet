@@ -171,6 +171,16 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
         }
     }
 
+    /// <summary>
+    /// Expected ML-DSA-65 public key size in bytes.
+    /// </summary>
+    internal const int MlDsaPublicKeySize = 1952;
+
+    /// <summary>
+    /// Offset of public key within ML-KEM-768 secret key.
+    /// </summary>
+    private const int MlKemPublicKeyOffset = 1152;
+
     public Task<IInbox> ImportInboxAsync(InboxExport export, CancellationToken ct = default)
     {
         ThrowIfDisposed();
@@ -178,27 +188,66 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
         using var activity = VaultSandboxTelemetry.StartActivity("ImportInbox");
         activity?.SetTag("vaultsandbox.inbox.email", export.EmailAddress);
 
-        // Validate export data
+        // Per spec Section 10.1: Validate in order
+
+        // Step 2: Validate version
+        if (export.Version != 1)
+            throw new InvalidImportDataException(
+                $"Unsupported export version: {export.Version} (expected 1)");
+
+        // Step 3: Validate required fields
         if (string.IsNullOrEmpty(export.EmailAddress))
             throw new InvalidImportDataException("EmailAddress is required");
-        if (string.IsNullOrEmpty(export.PublicKeyB64))
-            throw new InvalidImportDataException("PublicKeyB64 is required");
-        if (string.IsNullOrEmpty(export.SecretKeyB64))
-            throw new InvalidImportDataException("SecretKeyB64 is required");
+        if (string.IsNullOrEmpty(export.InboxHash))
+            throw new InvalidImportDataException("InboxHash is required");
+        if (string.IsNullOrEmpty(export.SecretKey))
+            throw new InvalidImportDataException("SecretKey is required");
+        if (string.IsNullOrEmpty(export.ServerSigPk))
+            throw new InvalidImportDataException("ServerSigPk is required");
+
+        // Step 4: Validate emailAddress format (must contain exactly one @)
+        int atCount = export.EmailAddress.Count(c => c == '@');
+        if (atCount != 1)
+            throw new InvalidImportDataException(
+                $"Invalid email address format: must contain exactly one '@' character (found {atCount})");
+
+        // Check expiration
         if (export.ExpiresAt < DateTimeOffset.UtcNow)
             throw new InvalidImportDataException("Inbox has expired");
 
-        // Decode keys
-        var publicKey = Base64Url.Decode(export.PublicKeyB64);
-        var secretKey = Base64Url.Decode(export.SecretKeyB64);
+        // Step 6: Validate and decode secretKey
+        byte[] secretKey;
+        try
+        {
+            secretKey = Base64Url.Decode(export.SecretKey);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidImportDataException($"Invalid SecretKey encoding: {ex.Message}");
+        }
 
-        // Validate key sizes
-        if (publicKey.Length != MlKemPublicKeySize)
-            throw new InvalidImportDataException(
-                $"Invalid public key size: {publicKey.Length} (expected {MlKemPublicKeySize})");
         if (secretKey.Length != MlKemSecretKeySize)
             throw new InvalidImportDataException(
                 $"Invalid secret key size: {secretKey.Length} (expected {MlKemSecretKeySize})");
+
+        // Step 7: Validate and decode serverSigPk
+        byte[] serverSigPkBytes;
+        try
+        {
+            serverSigPkBytes = Base64Url.Decode(export.ServerSigPk);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidImportDataException($"Invalid ServerSigPk encoding: {ex.Message}");
+        }
+
+        if (serverSigPkBytes.Length != MlDsaPublicKeySize)
+            throw new InvalidImportDataException(
+                $"Invalid server signature public key size: {serverSigPkBytes.Length} (expected {MlDsaPublicKeySize})");
+
+        // Per spec Section 10.2: Derive public key from secret key
+        // Public key is at bytes [1152:2400] of secret key
+        var publicKey = secretKey.AsSpan(MlKemPublicKeyOffset, MlKemPublicKeySize).ToArray();
 
         var keyPair = new MlKemKeyPair
         {

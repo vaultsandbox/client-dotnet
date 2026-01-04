@@ -241,7 +241,7 @@ public class VaultSandboxApiClientTests : IDisposable
         _mockHandler.SetResponse(json, HttpStatusCode.OK);
 
         // Act
-        var result = await _apiClient.GetEmailsAsync("test@example.com");
+        var result = await _apiClient.GetEmailsAsync("test@example.com", includeContent: true);
 
         // Assert
         result.Should().HaveCount(1);
@@ -256,7 +256,7 @@ public class VaultSandboxApiClientTests : IDisposable
         _mockHandler.SetResponse("[]", HttpStatusCode.OK);
 
         // Act
-        var result = await _apiClient.GetEmailsAsync("test@example.com");
+        var result = await _apiClient.GetEmailsAsync("test@example.com", includeContent: false);
 
         // Assert
         result.Should().BeEmpty();

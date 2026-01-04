@@ -85,14 +85,18 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
 
     #region Email Operations
 
-    public async Task<EmailResponse[]> GetEmailsAsync(string emailAddress, CancellationToken ct = default)
+    public async Task<EmailResponse[]> GetEmailsAsync(string emailAddress, bool includeContent, CancellationToken ct = default)
     {
         var encodedEmail = Uri.EscapeDataString(emailAddress);
+        var url = $"/api/inboxes/{encodedEmail}/emails";
+        if (includeContent)
+        {
+            url += "?includeContent=true";
+        }
 
         try
         {
-            return await SendAsync<EmailResponse[]>(
-                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/emails", ct);
+            return await SendAsync<EmailResponse[]>(HttpMethod.Get, url, ct);
         }
         catch (ApiException ex) when (ex.StatusCode == 404)
         {

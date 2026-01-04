@@ -22,8 +22,7 @@ public class InboxExportExtensionsTests
         ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
         InboxHash = "hash123abc",
         ServerSigPk = "server-sig-pk-base64",
-        PublicKeyB64 = "public-key-base64",
-        SecretKeyB64 = "secret-key-base64",
+        SecretKey = "secret-key-base64",
         ExportedAt = DateTimeOffset.UtcNow
     };
 
@@ -140,6 +139,22 @@ public class InboxExportExtensionsTests
 
         // Assert
         json.Should().Contain("\n"); // Indented JSON contains newlines
+    }
+
+    [Fact]
+    public async Task ExportToJsonAsync_ShouldIncludeVersionField()
+    {
+        // Arrange
+        var export = CreateTestExport();
+        var mockInbox = new Mock<IInbox>();
+        mockInbox.Setup(x => x.ExportAsync()).ReturnsAsync(export);
+
+        // Act
+        var json = await mockInbox.Object.ExportToJsonAsync();
+
+        // Assert - per spec, export must include version field
+        json.Should().Contain("\"version\"");
+        json.Should().Contain(": 1");
     }
 
     #endregion
@@ -313,8 +328,8 @@ public class InboxExportExtensionsTests
         parsed.EmailAddress.Should().Be(originalExport.EmailAddress);
         parsed.InboxHash.Should().Be(originalExport.InboxHash);
         parsed.ServerSigPk.Should().Be(originalExport.ServerSigPk);
-        parsed.PublicKeyB64.Should().Be(originalExport.PublicKeyB64);
-        parsed.SecretKeyB64.Should().Be(originalExport.SecretKeyB64);
+        parsed.SecretKey.Should().Be(originalExport.SecretKey);
+        parsed.Version.Should().Be(originalExport.Version);
     }
 
     [Fact]
