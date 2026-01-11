@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
 namespace VaultSandbox.Client.Http.Models;
@@ -5,6 +6,7 @@ namespace VaultSandbox.Client.Http.Models;
 /// <summary>
 /// Response from inbox sync status endpoint.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed record InboxSyncResponse
 {
     [JsonPropertyName("emailCount")]

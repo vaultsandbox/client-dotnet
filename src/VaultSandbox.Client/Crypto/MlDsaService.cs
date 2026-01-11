@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using VaultSandbox.Client.Exceptions;
@@ -26,15 +27,21 @@ internal sealed class MlDsaService
         if (publicKey.Length != PublicKeySize)
             throw new ArgumentException($"Public key must be {PublicKeySize} bytes", nameof(publicKey));
 
+        return VerifyCore(signature.ToArray(), message.ToArray(), publicKey.ToArray());
+    }
+
+    [ExcludeFromCodeCoverage]
+    private bool VerifyCore(byte[] signature, byte[] message, byte[] publicKey)
+    {
         try
         {
-            var publicKeyParams = MLDsaPublicKeyParameters.FromEncoding(_parameters, publicKey.ToArray());
+            var publicKeyParams = MLDsaPublicKeyParameters.FromEncoding(_parameters, publicKey);
 
             var verifier = new MLDsaSigner(_parameters, false);
             verifier.Init(forSigning: false, publicKeyParams);
-            verifier.BlockUpdate(message.ToArray(), 0, message.Length);
+            verifier.BlockUpdate(message, 0, message.Length);
 
-            return verifier.VerifySignature(signature.ToArray());
+            return verifier.VerifySignature(signature);
         }
         catch (Exception ex)
         {

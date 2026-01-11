@@ -17,9 +17,10 @@ internal abstract class DeliveryStrategyBase : IDeliveryStrategy
         string emailAddress,
         Func<SseEmailEvent, Task> onEmail,
         TimeSpan pollInterval,
+        Func<Task>? onReconnected = null,
         CancellationToken ct = default)
     {
-        var subscription = new InboxSubscription(inboxHash, emailAddress, onEmail, pollInterval, ct);
+        var subscription = new InboxSubscription(inboxHash, emailAddress, onEmail, pollInterval, onReconnected, ct);
 
         if (!Subscriptions.TryAdd(inboxHash, subscription))
         {
@@ -47,5 +48,6 @@ internal abstract class DeliveryStrategyBase : IDeliveryStrategy
         string EmailAddress,
         Func<SseEmailEvent, Task> OnEmail,
         TimeSpan PollInterval,
+        Func<Task>? OnReconnected,
         CancellationToken CancellationToken);
 }

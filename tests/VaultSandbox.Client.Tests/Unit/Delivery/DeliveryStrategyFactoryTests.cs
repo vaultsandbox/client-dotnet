@@ -46,17 +46,6 @@ public class DeliveryStrategyFactoryTests
     }
 
     [Fact]
-    public async Task Create_Auto_ShouldReturnAutoDeliveryStrategy()
-    {
-        // Act
-        var strategy = _factory.Create(DeliveryStrategy.Auto);
-
-        // Assert
-        strategy.Should().BeOfType<AutoDeliveryStrategy>();
-        await strategy.DisposeAsync();
-    }
-
-    [Fact]
     public void Create_InvalidStrategy_ShouldThrowArgumentOutOfRangeException()
     {
         // Act

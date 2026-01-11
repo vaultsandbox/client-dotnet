@@ -97,26 +97,6 @@ public class InboxIntegrationTests : IntegrationTestBase
     }
 
     [SkippableFact]
-    public async Task DeleteAllInboxes_ShouldRemoveAllInboxes()
-    {
-        SkipIfNotConfigured();
-
-        // Arrange
-        var inbox1 = await Client.CreateInboxAsync();
-        var inbox2 = await Client.CreateInboxAsync();
-
-        // Act
-        var deletedCount = await Client.DeleteAllInboxesAsync();
-
-        // Assert
-        deletedCount.Should().BeGreaterThanOrEqualTo(2);
-
-        // Dispose without error since inboxes are already deleted
-        await inbox1.DisposeAsync();
-        await inbox2.DisposeAsync();
-    }
-
-    [SkippableFact]
     public async Task ExportInbox_ShouldReturnValidExportData()
     {
         SkipIfNotConfigured();
@@ -274,5 +254,150 @@ public class InboxIntegrationTests : IntegrationTestBase
         status1.EmailsHash.Should().Be(status2.EmailsHash);
         status2.EmailsHash.Should().Be(status3.EmailsHash);
         status1.EmailCount.Should().Be(0);
+    }
+
+    [SkippableFact]
+    public async Task GetEmailsMetadataOnly_EmptyInbox_ShouldReturnEmptyList()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var inbox = await Client.CreateInboxAsync();
+
+        // Act
+        var metadata = await inbox.GetEmailsMetadataOnlyAsync();
+
+        // Assert
+        metadata.Should().BeEmpty();
+    }
+
+    [SkippableFact]
+    public async Task GetEmailsMetadataOnly_WithEmails_ShouldReturnMetadataWithoutBody()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var inbox = await Client.CreateInboxAsync();
+        var subject = $"Metadata Test {Guid.NewGuid():N}";
+        var body = "This body should not be in metadata response";
+        var fromAddress = "metadata-sender@test.example.com";
+
+        await SendTestEmailAsync(inbox.EmailAddress, subject, body, from: fromAddress);
+
+        // Wait for email to arrive
+        await inbox.WaitForEmailAsync(new WaitForEmailOptions
+        {
+            Subject = subject,
+            Timeout = TimeSpan.FromSeconds(30)
+        });
+
+        // Act
+        var metadataList = await inbox.GetEmailsMetadataOnlyAsync();
+
+        // Assert
+        metadataList.Should().HaveCount(1);
+        var metadata = metadataList[0];
+        metadata.Id.Should().NotBeNullOrEmpty();
+        metadata.Subject.Should().Be(subject);
+        metadata.From.Should().Contain(fromAddress);
+        metadata.ReceivedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(5));
+        metadata.IsRead.Should().BeFalse();
+    }
+
+    [SkippableFact]
+    public async Task GetEmailsMetadataOnly_WithMultipleEmails_ShouldReturnAllMetadata()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var inbox = await Client.CreateInboxAsync();
+        var subjects = new[]
+        {
+            $"Metadata 1 - {Guid.NewGuid():N}",
+            $"Metadata 2 - {Guid.NewGuid():N}",
+            $"Metadata 3 - {Guid.NewGuid():N}"
+        };
+
+        // Send multiple emails
+        foreach (var subject in subjects)
+        {
+            await SendTestEmailAsync(inbox.EmailAddress, subject, $"Body for {subject}");
+        }
+
+        // Wait for all emails to arrive
+        await Task.Delay(2000);
+        await inbox.WaitForEmailAsync(new WaitForEmailOptions
+        {
+            Subject = subjects[^1],
+            Timeout = TimeSpan.FromSeconds(30)
+        });
+
+        // Act
+        var metadataList = await inbox.GetEmailsMetadataOnlyAsync();
+
+        // Assert
+        metadataList.Should().HaveCountGreaterThanOrEqualTo(3);
+        foreach (var subject in subjects)
+        {
+            metadataList.Should().Contain(m => m.Subject == subject);
+        }
+    }
+
+    [SkippableFact]
+    public async Task GetEmailsMetadataOnly_ShouldMatchFullEmailData()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var inbox = await Client.CreateInboxAsync();
+        var subject = $"Metadata Comparison {Guid.NewGuid():N}";
+        var fromAddress = "comparison-test@example.com";
+
+        await SendTestEmailAsync(inbox.EmailAddress, subject, "Test body", from: fromAddress);
+
+        var fullEmail = await inbox.WaitForEmailAsync(new WaitForEmailOptions
+        {
+            Subject = subject,
+            Timeout = TimeSpan.FromSeconds(30)
+        });
+
+        // Act
+        var metadataList = await inbox.GetEmailsMetadataOnlyAsync();
+
+        // Assert - Metadata should match the full email properties
+        var metadata = metadataList.Single(m => m.Id == fullEmail.Id);
+        metadata.Subject.Should().Be(fullEmail.Subject);
+        metadata.From.Should().Be(fullEmail.From);
+        metadata.ReceivedAt.Should().Be(fullEmail.ReceivedAt);
+        metadata.IsRead.Should().Be(fullEmail.IsRead);
+    }
+
+    [SkippableFact]
+    public async Task GetEmailsMetadataOnly_AfterMarkAsRead_ShouldReflectReadStatus()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var inbox = await Client.CreateInboxAsync();
+        var subject = $"Read Status Metadata {Guid.NewGuid():N}";
+
+        await SendTestEmailAsync(inbox.EmailAddress, subject, "Test body");
+
+        var email = await inbox.WaitForEmailAsync(new WaitForEmailOptions
+        {
+            Subject = subject,
+            Timeout = TimeSpan.FromSeconds(30)
+        });
+
+        // Verify initially unread
+        var initialMetadata = await inbox.GetEmailsMetadataOnlyAsync();
+        initialMetadata.Single(m => m.Id == email.Id).IsRead.Should().BeFalse();
+
+        // Act - Mark as read
+        await inbox.MarkAsReadAsync(email.Id);
+
+        // Assert - Metadata should reflect read status
+        var updatedMetadata = await inbox.GetEmailsMetadataOnlyAsync();
+        updatedMetadata.Single(m => m.Id == email.Id).IsRead.Should().BeTrue();
     }
 }

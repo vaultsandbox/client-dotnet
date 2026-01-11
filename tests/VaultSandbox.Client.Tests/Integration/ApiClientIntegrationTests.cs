@@ -259,38 +259,6 @@ public class ApiClientIntegrationTests : IAsyncLifetime
     }
 
     [SkippableFact]
-    public async Task DeleteAllInboxes_ShouldReturnDeletedCount()
-    {
-        Skip.IfNot(_settings.IsConfigured, "Integration tests require .env configuration");
-
-        // Arrange - Create a couple of inboxes
-        var keyPair1 = _cryptoProvider.GenerateKeyPair();
-        var keyPair2 = _cryptoProvider.GenerateKeyPair();
-
-        await _apiClient.CreateInboxAsync(new CreateInboxRequest
-        {
-            ClientKemPk = keyPair1.PublicKeyB64,
-            Ttl = 300
-        });
-
-        await _apiClient.CreateInboxAsync(new CreateInboxRequest
-        {
-            ClientKemPk = keyPair2.PublicKeyB64,
-            Ttl = 300
-        });
-
-        // Act
-        var response = await _apiClient.DeleteAllInboxesAsync();
-
-        // Assert
-        response.Should().NotBeNull();
-        response.Deleted.Should().BeGreaterThanOrEqualTo(2);
-
-        // Clear cleanup list since we just deleted everything
-        _createdInboxes.Clear();
-    }
-
-    [SkippableFact]
     public async Task GetEmail_NonExistent_ShouldThrowEmailNotFoundException()
     {
         Skip.IfNot(_settings.IsConfigured, "Integration tests require .env configuration");

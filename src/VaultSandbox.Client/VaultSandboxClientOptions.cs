@@ -51,9 +51,9 @@ public sealed class VaultSandboxClientOptions
 
     /// <summary>
     /// SSE reconnection interval in milliseconds.
-    /// Default: 5000 (5 seconds)
+    /// Default: 2000 (2 seconds)
     /// </summary>
-    public int SseReconnectIntervalMs { get; set; } = 5_000;
+    public int SseReconnectIntervalMs { get; set; } = 2_000;
 
     /// <summary>
     /// Maximum SSE reconnection attempts.
@@ -63,9 +63,9 @@ public sealed class VaultSandboxClientOptions
 
     /// <summary>
     /// Default delivery strategy.
-    /// Default: Auto
+    /// Default: Sse
     /// </summary>
-    public DeliveryStrategy DefaultDeliveryStrategy { get; set; } = DeliveryStrategy.Auto;
+    public DeliveryStrategy DefaultDeliveryStrategy { get; set; } = DeliveryStrategy.Sse;
 
     /// <summary>
     /// Default inbox TTL in seconds.
@@ -123,17 +123,12 @@ public sealed class VaultSandboxClientOptions
 public enum DeliveryStrategy
 {
     /// <summary>
-    /// Use SSE with polling fallback (recommended).
-    /// </summary>
-    Auto,
-
-    /// <summary>
-    /// Use only Server-Sent Events.
+    /// Use Server-Sent Events for real-time updates (default).
     /// </summary>
     Sse,
 
     /// <summary>
-    /// Use only polling.
+    /// Use polling for updates.
     /// </summary>
     Polling
 }

@@ -34,15 +34,6 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         if (Client is null)
             return;
 
-        try
-        {
-            await Client.DeleteAllInboxesAsync();
-        }
-        catch
-        {
-            // Ignore cleanup errors
-        }
-
         await Client.DisposeAsync();
     }
 

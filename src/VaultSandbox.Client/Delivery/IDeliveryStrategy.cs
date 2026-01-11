@@ -14,12 +14,14 @@ internal interface IDeliveryStrategy : IAsyncDisposable
     /// <param name="emailAddress">The inbox email address.</param>
     /// <param name="onEmail">Callback invoked when a new email arrives.</param>
     /// <param name="pollInterval">Polling interval for polling-based strategies.</param>
+    /// <param name="onReconnected">Optional callback invoked when the connection is re-established after a disconnect.</param>
     /// <param name="ct">Cancellation token.</param>
     Task SubscribeAsync(
         string inboxHash,
         string emailAddress,
         Func<SseEmailEvent, Task> onEmail,
         TimeSpan pollInterval,
+        Func<Task>? onReconnected = null,
         CancellationToken ct = default);
 
     /// <summary>

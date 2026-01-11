@@ -122,6 +122,7 @@ public sealed class VaultSandboxClientBuilder
 
     /// <summary>
     /// Uses SSE delivery strategy for real-time updates.
+    /// This is the default.
     /// </summary>
     public VaultSandboxClientBuilder UseSseDelivery()
     {
@@ -135,16 +136,6 @@ public sealed class VaultSandboxClientBuilder
     public VaultSandboxClientBuilder UsePollingDelivery()
     {
         _deliveryStrategy = DeliveryStrategy.Polling;
-        return this;
-    }
-
-    /// <summary>
-    /// Uses auto delivery strategy (SSE with polling fallback).
-    /// This is the default.
-    /// </summary>
-    public VaultSandboxClientBuilder UseAutoDelivery()
-    {
-        _deliveryStrategy = DeliveryStrategy.Auto;
         return this;
     }
 

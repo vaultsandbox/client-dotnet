@@ -131,6 +131,7 @@ internal sealed class SseDeliveryStrategy : DeliveryStrategyBase
     private async Task RunConnectionLoopAsync(CancellationToken ct)
     {
         var isFirstAttempt = true;
+        var hadPreviousConnection = false;
 
         while (!ct.IsCancellationRequested && !Subscriptions.IsEmpty)
         {
@@ -155,6 +156,15 @@ internal sealed class SseDeliveryStrategy : DeliveryStrategyBase
                     _initialConnectionTcs = null;
                 }
 
+                // Trigger sync callbacks on reconnection (not first connect)
+                if (hadPreviousConnection)
+                {
+                    _logger?.LogDebug("SSE reconnected, triggering sync callbacks");
+                    await InvokeReconnectCallbacksAsync();
+                }
+
+                hadPreviousConnection = true;
+
                 await ProcessSseStreamAsync(stream, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -162,6 +172,20 @@ internal sealed class SseDeliveryStrategy : DeliveryStrategyBase
                 _logger?.LogDebug("SSE connection cancelled");
                 _initialConnectionTcs?.TrySetCanceled(ct);
                 break;
+            }
+            catch (ApiException ex) when (ex.StatusCode == 400 &&
+                ex.ResponseBody?.Contains("No matching inbox hashes found") == true)
+            {
+                // Server returns 400 when inbox hashes don't exist (deleted or invalid)
+                var emailAddress = Subscriptions.Values.FirstOrDefault()?.EmailAddress ?? "unknown";
+                var notFoundEx = new InboxNotFoundException(emailAddress);
+
+                if (isFirstAttempt)
+                {
+                    _initialConnectionTcs?.TrySetException(notFoundEx);
+                    _initialConnectionTcs = null;
+                }
+                throw notFoundEx;
             }
             catch (Exception ex)
             {
@@ -195,6 +219,26 @@ internal sealed class SseDeliveryStrategy : DeliveryStrategyBase
         }
 
         _isConnected = false;
+    }
+
+    private async Task InvokeReconnectCallbacksAsync()
+    {
+        foreach (var subscription in Subscriptions.Values)
+        {
+            if (subscription.OnReconnected is not null)
+            {
+                try
+                {
+                    await subscription.OnReconnected();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex,
+                        "Reconnect callback failed for inbox {InboxHash}",
+                        subscription.InboxHash);
+                }
+            }
+        }
     }
 
     private async Task ProcessSseStreamAsync(Stream stream, CancellationToken ct)

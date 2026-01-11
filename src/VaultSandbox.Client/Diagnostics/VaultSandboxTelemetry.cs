@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
 
 namespace VaultSandbox.Client.Diagnostics;
@@ -7,6 +8,7 @@ namespace VaultSandbox.Client.Diagnostics;
 /// OpenTelemetry instrumentation for VaultSandbox client.
 /// Use <see cref="ActivitySource"/> for distributed tracing and <see cref="Meter"/> for metrics.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class VaultSandboxTelemetry
 {
     /// <summary>

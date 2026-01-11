@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
 namespace VaultSandbox.Client.Http.Models;
@@ -5,6 +6,7 @@ namespace VaultSandbox.Client.Http.Models;
 /// <summary>
 /// Response from the /api/server-info endpoint.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed record ServerInfoResponse
 {
     [JsonPropertyName("serverSigPk")]
@@ -32,6 +34,7 @@ public sealed record ServerInfoResponse
 /// <summary>
 /// Algorithm configuration from server.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed record AlgorithmInfo
 {
     [JsonPropertyName("kem")]

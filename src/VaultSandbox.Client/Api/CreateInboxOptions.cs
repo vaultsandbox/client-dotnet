@@ -1,8 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace VaultSandbox.Client.Api;
 
 /// <summary>
 /// Options for creating a new inbox.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed class CreateInboxOptions
 {
     /// <summary>

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
@@ -23,6 +25,7 @@ internal sealed class Inbox : IInbox
     private readonly ILogger<Inbox>? _logger;
 
     private readonly Channel<Email> _emailChannel;
+    private readonly ConcurrentDictionary<string, bool> _localEmailIds = new();
     private bool _isSubscribed;
     private readonly SemaphoreSlim _subscriptionLock = new(1, 1);
 
@@ -333,6 +336,7 @@ internal sealed class Inbox : IInbox
                 EmailAddress,
                 OnEmailReceivedAsync,
                 pollInterval,
+                SyncWithServerAsync,
                 ct);
 
             _isSubscribed = true;
@@ -349,6 +353,13 @@ internal sealed class Inbox : IInbox
     {
         try
         {
+            // Check for duplicate - skip if already processed
+            if (!_localEmailIds.TryAdd(emailEvent.EmailId, true))
+            {
+                _logger?.LogDebug("Skipping duplicate email event for {EmailId}", emailEvent.EmailId);
+                return;
+            }
+
             _logger?.LogDebug("Received email event for {EmailId}", emailEvent.EmailId);
 
             // Fetch full email data
@@ -360,6 +371,77 @@ internal sealed class Inbox : IInbox
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to process email event {EmailId}", emailEvent.EmailId);
+        }
+    }
+
+    private async Task SyncWithServerAsync()
+    {
+        try
+        {
+            _logger?.LogDebug("Starting sync for inbox {EmailAddress}", EmailAddress);
+
+            // Compute local hash from known email IDs
+            var localHash = EmailHashCalculator.ComputeHash(_localEmailIds.Keys);
+
+            // Get server sync status
+            var serverSync = await _apiClient.GetInboxSyncAsync(EmailAddress);
+
+            if (localHash == serverSync.EmailsHash)
+            {
+                _logger?.LogDebug("Inbox {EmailAddress} is in sync (hash: {Hash})", EmailAddress, localHash);
+                return;
+            }
+
+            _logger?.LogDebug(
+                "Inbox {EmailAddress} out of sync. Local hash: {LocalHash}, Server hash: {ServerHash}",
+                EmailAddress, localHash, serverSync.EmailsHash);
+
+            // Fetch all email IDs from server (metadata only for speed)
+            var serverEmails = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: false);
+            var serverEmailIds = new HashSet<string>(serverEmails.Select(e => e.Id));
+
+            // Find new emails (on server but not local)
+            var newEmailIds = serverEmailIds.Except(_localEmailIds.Keys).ToList();
+
+            // Find deleted emails (local but not on server)
+            var deletedEmailIds = _localEmailIds.Keys.Except(serverEmailIds).ToList();
+
+            _logger?.LogDebug(
+                "Sync found {NewCount} new emails and {DeletedCount} deleted emails",
+                newEmailIds.Count, deletedEmailIds.Count);
+
+            // Remove deleted emails from local cache
+            foreach (var deletedId in deletedEmailIds)
+            {
+                _localEmailIds.TryRemove(deletedId, out _);
+            }
+
+            // Fetch and process new emails
+            foreach (var newEmailId in newEmailIds)
+            {
+                // Add to local cache first to prevent duplicates
+                if (!_localEmailIds.TryAdd(newEmailId, true))
+                    continue;
+
+                try
+                {
+                    var encrypted = await _apiClient.GetEmailAsync(EmailAddress, newEmailId);
+                    var email = await DecryptEmailAsync(encrypted);
+                    await _emailChannel.Writer.WriteAsync(email);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to fetch email {EmailId} during sync", newEmailId);
+                    // Remove from cache if fetch failed
+                    _localEmailIds.TryRemove(newEmailId, out _);
+                }
+            }
+
+            _logger?.LogDebug("Sync completed for inbox {EmailAddress}", EmailAddress);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to sync inbox {EmailAddress}", EmailAddress);
         }
     }
 
@@ -455,6 +537,7 @@ internal sealed class Inbox : IInbox
         };
     }
 
+    [ExcludeFromCodeCoverage]
     private static object ConvertJsonElement(System.Text.Json.JsonElement element)
     {
         return element.ValueKind switch

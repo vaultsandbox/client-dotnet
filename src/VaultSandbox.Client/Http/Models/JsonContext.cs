@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 using VaultSandbox.Client.Api;
 using VaultSandbox.Client.Crypto;
@@ -39,6 +40,7 @@ namespace VaultSandbox.Client.Http.Models;
 [JsonSerializable(typeof(InboxSyncStatus))]
 [JsonSerializable(typeof(AuthValidation))]
 [JsonSerializable(typeof(string[]))]
+[ExcludeFromCodeCoverage]
 internal partial class VaultSandboxJsonContext : JsonSerializerContext
 {
 }

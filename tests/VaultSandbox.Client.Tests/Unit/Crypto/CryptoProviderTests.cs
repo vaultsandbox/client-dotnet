@@ -247,6 +247,194 @@ public class CryptoProviderTests
         act.Should().Throw<ServerKeyMismatchException>();
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(255)]
+    public void Decrypt_InvalidVersion_ShouldThrowDecryptionException(int version)
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        payload = payload with { Version = version };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage($"*Unsupported payload version: {version}*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidKemAlgorithm_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        payload = payload with { Algorithms = payload.Algorithms with { Kem = "ML-KEM-1024" } };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Unsupported KEM algorithm: ML-KEM-1024*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidSigAlgorithm_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        payload = payload with { Algorithms = payload.Algorithms with { Sig = "ML-DSA-87" } };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Unsupported signature algorithm: ML-DSA-87*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidAeadAlgorithm_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        payload = payload with { Algorithms = payload.Algorithms with { Aead = "ChaCha20-Poly1305" } };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Unsupported AEAD algorithm: ChaCha20-Poly1305*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidKdfAlgorithm_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        payload = payload with { Algorithms = payload.Algorithms with { Kdf = "HKDF-SHA-256" } };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Unsupported KDF algorithm: HKDF-SHA-256*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidCtKemSize_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        // Create a ct_kem with wrong size (expected 1088)
+        byte[] wrongSizeCtKem = new byte[1000];
+        RandomNumberGenerator.Fill(wrongSizeCtKem);
+        payload = payload with { CtKem = Base64Url.Encode(wrongSizeCtKem) };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Invalid ct_kem size: 1000 bytes (expected 1088)*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidNonceSize_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        // Create a nonce with wrong size (expected 12)
+        byte[] wrongSizeNonce = new byte[16];
+        RandomNumberGenerator.Fill(wrongSizeNonce);
+        payload = payload with { Nonce = Base64Url.Encode(wrongSizeNonce) };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Invalid nonce size: 16 bytes (expected 12)*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidSignatureSize_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        // Create a signature with wrong size (expected 3309)
+        byte[] wrongSizeSignature = new byte[3000];
+        RandomNumberGenerator.Fill(wrongSizeSignature);
+        payload = payload with { Signature = Base64Url.Encode(wrongSizeSignature) };
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, payload.ServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Invalid signature size: 3000 bytes (expected 3309)*");
+    }
+
+    [Fact]
+    public void Decrypt_InvalidServerSigPkSize_ShouldThrowDecryptionException()
+    {
+        // Arrange
+        MlKemKeyPair clientKeyPair = _cryptoProvider.GenerateKeyPair();
+        EncryptedPayload payload = CreateValidEncryptedPayload(
+            clientKeyPair.PublicKey,
+            "Test"u8.ToArray()
+        );
+        // Create a server_sig_pk with wrong size (expected 1952)
+        byte[] wrongSizeServerSigPk = new byte[2000];
+        RandomNumberGenerator.Fill(wrongSizeServerSigPk);
+        payload = payload with { ServerSigPk = Base64Url.Encode(wrongSizeServerSigPk) };
+        // Use the same wrong-sized key as expected (to pass the key comparison)
+        string expectedServerSigPk = payload.ServerSigPk;
+
+        // Act
+        Action act = () => _cryptoProvider.Decrypt(payload, clientKeyPair.SecretKey, expectedServerSigPk);
+
+        // Assert
+        act.Should().Throw<DecryptionException>()
+            .WithMessage("*Invalid server_sig_pk size: 2000 bytes (expected 1952)*");
+    }
+
     /// <summary>
     /// Creates a valid encrypted payload for testing.
     /// Simulates what the server would produce.

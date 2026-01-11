@@ -173,29 +173,6 @@ public class DeliveryStrategyIntegrationTests : IAsyncLifetime
     }
 
     [SkippableFact]
-    public async Task AutoStrategy_ShouldConnectViaSse()
-    {
-        Skip.IfNot(_settings.IsConfigured, "Integration tests require .env configuration");
-
-        // Arrange
-        var inbox = await CreateTestInboxAsync();
-        await using var strategy = new AutoDeliveryStrategy(_apiClient, _options);
-
-        // Act
-        await strategy.SubscribeAsync(
-            inbox.InboxHash,
-            inbox.EmailAddress,
-            _ => Task.CompletedTask,
-            TimeSpan.FromSeconds(2));
-
-        // Wait for connection
-        await Task.Delay(500);
-
-        // Assert
-        strategy.IsConnected.Should().BeTrue();
-    }
-
-    [SkippableFact]
     public async Task DeliveryStrategyFactory_ShouldCreateAllStrategies()
     {
         Skip.IfNot(_settings.IsConfigured, "Integration tests require .env configuration");
@@ -210,10 +187,6 @@ public class DeliveryStrategyIntegrationTests : IAsyncLifetime
         // Act & Assert - Polling
         await using var pollingStrategy = factory.Create(DeliveryStrategy.Polling);
         pollingStrategy.Should().BeOfType<PollingDeliveryStrategy>();
-
-        // Act & Assert - Auto
-        await using var autoStrategy = factory.Create(DeliveryStrategy.Auto);
-        autoStrategy.Should().BeOfType<AutoDeliveryStrategy>();
     }
 
     private async Task<CreateInboxResponse> CreateTestInboxAsync()

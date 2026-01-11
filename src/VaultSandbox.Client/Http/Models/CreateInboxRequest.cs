@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
 namespace VaultSandbox.Client.Http.Models;
@@ -5,6 +6,7 @@ namespace VaultSandbox.Client.Http.Models;
 /// <summary>
 /// Request to create a new inbox.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed record CreateInboxRequest
 {
     [JsonPropertyName("clientKemPk")]

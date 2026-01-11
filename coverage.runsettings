@@ -5,8 +5,10 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Exclude>[*]*.g.cs</Exclude>
-          <ExcludeByFile>**/obj/**/*.cs,**/*.g.cs</ExcludeByFile>
+          <Exclude>[*]*JsonContext*,[*]*.g.cs,[VaultSandbox.Client]*VaultSandboxJsonContext*</Exclude>
+          <ExcludeByFile>**/obj/**/*.cs,**/*.g.cs,**/JsonContext.cs</ExcludeByFile>
+          <ExcludeByAttribute>ExcludeFromCodeCoverage,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
         </Configuration>
       </DataCollector>
     </DataCollectors>

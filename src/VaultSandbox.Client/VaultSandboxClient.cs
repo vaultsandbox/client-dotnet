@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using VaultSandbox.Client.Api;
 using VaultSandbox.Client.Crypto;
 using VaultSandbox.Client.Delivery;
 using VaultSandbox.Client.Diagnostics;
+using static VaultSandbox.Client.Diagnostics.Log;
 using VaultSandbox.Client.Exceptions;
 using VaultSandbox.Client.Http;
 using VaultSandbox.Client.Http.Models;
@@ -79,7 +81,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
             // Generate ML-KEM-768 keypair
             var keyPair = _cryptoProvider.GenerateKeyPair();
 
-            _logger?.LogDebug("Generated ML-KEM-768 keypair for new inbox");
+            Log.Debug(_logger, "Generated ML-KEM-768 keypair for new inbox");
 
             // Calculate TTL in seconds (use default from options if not specified)
             int ttlSeconds = options?.Ttl is not null
@@ -96,8 +98,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
 
             var response = await _apiClient.CreateInboxAsync(request, ct);
 
-            _logger?.LogInformation(
-                "Created inbox {EmailAddress} (expires: {ExpiresAt})",
+            Information(_logger, "Created inbox {EmailAddress} (expires: {ExpiresAt})",
                 response.EmailAddress, response.ExpiresAt);
 
             activity?.SetTag("vaultsandbox.inbox.email", response.EmailAddress);
@@ -138,7 +139,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
         try
         {
             await _apiClient.DeleteInboxAsync(emailAddress, ct);
-            _logger?.LogInformation("Deleted inbox {EmailAddress}", emailAddress);
+            Information(_logger, "Deleted inbox {EmailAddress}", emailAddress);
             VaultSandboxTelemetry.InboxesDeleted.Add(1);
         }
         catch (Exception ex)
@@ -149,6 +150,12 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
         }
     }
 
+    /// <summary>
+    /// Deletes all inboxes associated with the current API key.
+    /// WARNING: This method should NEVER be called in tests as it will delete all server inboxes
+    /// and interfere with other tests running in parallel.
+    /// </summary>
+    [ExcludeFromCodeCoverage]
     public async Task<int> DeleteAllInboxesAsync(CancellationToken ct = default)
     {
         ThrowIfDisposed();
@@ -158,7 +165,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
         try
         {
             var response = await _apiClient.DeleteAllInboxesAsync(ct);
-            _logger?.LogInformation("Deleted {Count} inboxes", response.Deleted);
+            Information(_logger, "Deleted {Count} inboxes", response.Deleted);
             activity?.SetTag("vaultsandbox.deleted.count", response.Deleted);
             VaultSandboxTelemetry.InboxesDeleted.Add(response.Deleted);
             return response.Deleted;
@@ -255,7 +262,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
             SecretKey = secretKey
         };
 
-        _logger?.LogInformation("Imported inbox {EmailAddress}", export.EmailAddress);
+        Information(_logger, "Imported inbox {EmailAddress}", export.EmailAddress);
 
         // Create delivery strategy for this inbox
         var strategy = _deliveryStrategyFactory.Create(_options.DefaultDeliveryStrategy);
@@ -332,7 +339,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
         if (inboxes.Count == 0)
             throw new ArgumentException("At least one inbox is required", nameof(inboxes));
 
-        _logger?.LogDebug("Creating monitor for {Count} inboxes", inboxes.Count);
+        Debug(_logger, "Creating monitor for {Count} inboxes", inboxes.Count);
 
         return new InboxMonitor(inboxes);
     }
@@ -369,8 +376,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
 
         await File.WriteAllTextAsync(filePath, json, ct);
 
-        _logger?.LogInformation(
-            "Exported inbox {EmailAddress} to {FilePath}",
+        Information(_logger, "Exported inbox {EmailAddress} to {FilePath}",
             inbox.EmailAddress, filePath);
     }
 
@@ -414,8 +420,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 $"Invalid JSON in inbox export file: {ex.Message}");
         }
 
-        _logger?.LogInformation(
-            "Importing inbox {EmailAddress} from {FilePath}",
+        Information(_logger, "Importing inbox {EmailAddress} from {FilePath}",
             export.EmailAddress, filePath);
 
         return await ImportInboxAsync(export, ct);
@@ -448,6 +453,6 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
             _apiClient.Dispose();
         }
 
-        _logger?.LogDebug("VaultSandboxClient disposed");
+        Debug(_logger, "VaultSandboxClient disposed");
     }
 }

@@ -36,12 +36,6 @@ internal sealed class DeliveryStrategyFactory
                 _options,
                 _loggerFactory?.CreateLogger<PollingDeliveryStrategy>()),
 
-            DeliveryStrategy.Auto => new AutoDeliveryStrategy(
-                _apiClient,
-                _options,
-                _loggerFactory?.CreateLogger<AutoDeliveryStrategy>(),
-                _loggerFactory),
-
             _ => throw new ArgumentOutOfRangeException(nameof(strategy))
         };
     }

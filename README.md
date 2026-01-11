@@ -35,7 +35,7 @@ Stop mocking your email stack. If your app sends real emails in production, it m
 
 - **Quantum-Safe Encryption** — Automatic ML-KEM-768 (Kyber768) key encapsulation + AES-256-GCM encryption
 - **Zero Crypto Knowledge Required** — All cryptographic operations are invisible to the user
-- **Real-Time Email Delivery** — SSE-based delivery with smart polling fallback
+- **Real-Time Email Delivery** — SSE-based delivery for instant updates
 - **Built for CI/CD** — Deterministic tests without sleeps, polling, or flakiness
 - **Full Email Access** — Decrypt and access email content, headers, links, and attachments
 - **Email Authentication** — Built-in SPF/DKIM/DMARC validation helpers
@@ -426,7 +426,7 @@ services.AddVaultSandboxClient(options =>
 {
     options.BaseUrl = "https://smtp.vaultsandbox.com";
     options.ApiKey = Environment.GetEnvironmentVariable("VAULTSANDBOX_API_KEY")!;
-    options.DefaultDeliveryStrategy = DeliveryStrategy.Auto;
+    options.DefaultDeliveryStrategy = DeliveryStrategy.Sse;
 });
 ```
 
@@ -487,9 +487,8 @@ VaultSandboxClientBuilder.Create()
 - `WithSseReconnectInterval(TimeSpan interval)` - SSE reconnection interval (default: 5s)
 - `WithSseMaxReconnectAttempts(int maxAttempts)` - Max SSE reconnection attempts (default: 10)
 - `WithDeliveryStrategy(DeliveryStrategy strategy)` - Delivery strategy
-- `UseSseDelivery()` - Use SSE delivery strategy
+- `UseSseDelivery()` - Use SSE delivery strategy (default)
 - `UsePollingDelivery()` - Use polling delivery strategy
-- `UseAutoDelivery()` - Use auto delivery strategy (default)
 - `WithDefaultInboxTtl(TimeSpan ttl)` - Default inbox TTL (default: 1 hour)
 - `WithLogging(ILoggerFactory loggerFactory)` - Configure logging
 - `WithHttpClient(HttpClient httpClient, bool disposeClient = false)` - Use custom HttpClient
@@ -741,7 +740,7 @@ public sealed class VaultSandboxClientOptions
     public int RetryDelayMs { get; set; } = 1_000;
     public int SseReconnectIntervalMs { get; set; } = 5_000;
     public int SseMaxReconnectAttempts { get; set; } = 10;
-    public DeliveryStrategy DefaultDeliveryStrategy { get; set; } = DeliveryStrategy.Auto;
+    public DeliveryStrategy DefaultDeliveryStrategy { get; set; } = DeliveryStrategy.Sse;
     public int DefaultInboxTtlSeconds { get; set; } = 3600;
 }
 ```
@@ -751,9 +750,8 @@ public sealed class VaultSandboxClientOptions
 ```csharp
 public enum DeliveryStrategy
 {
-    Auto,       // SSE with polling fallback (recommended)
-    Sse,        // Server-Sent Events only
-    Polling     // Polling only
+    Sse,        // Server-Sent Events (default)
+    Polling     // Polling
 }
 ```
 

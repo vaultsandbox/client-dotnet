@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using VaultSandbox.Client.Crypto;
 using VaultSandbox.Client.Http;
 using VaultSandbox.Client.Http.Models;
 
@@ -85,13 +86,15 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
             {
                 var syncStatus = await _apiClient.GetInboxSyncAsync(subscription.EmailAddress, ct);
 
-                if (state.LastEmailsHash != syncStatus.EmailsHash)
+                // Compute local hash from processed email IDs
+                var localHash = EmailHashCalculator.ComputeHash(state.ProcessedEmailIds);
+
+                if (localHash != syncStatus.EmailsHash)
                 {
                     _logger?.LogDebug(
-                        "Inbox {EmailAddress} has changes (hash: {Hash})",
-                        subscription.EmailAddress, syncStatus.EmailsHash);
+                        "Inbox {EmailAddress} has changes (server hash: {ServerHash}, local hash: {LocalHash})",
+                        subscription.EmailAddress, syncStatus.EmailsHash, localHash);
 
-                    state.LastEmailsHash = syncStatus.EmailsHash;
                     currentBackoff = initialIntervalMs; // Reset backoff on change
 
                     // Fetch new emails (metadata only since we just need IDs)
@@ -113,6 +116,14 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
                         };
 
                         await subscription.OnEmail(emailEvent);
+                    }
+
+                    // Handle deleted emails - remove from local state
+                    var serverEmailIds = new HashSet<string>(emails.Select(e => e.Id));
+                    var deletedIds = state.ProcessedEmailIds.Except(serverEmailIds).ToList();
+                    foreach (var deletedId in deletedIds)
+                    {
+                        state.ProcessedEmailIds.Remove(deletedId);
                     }
                 }
                 else
@@ -176,7 +187,6 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
 
     private sealed class PollingState
     {
-        public string? LastEmailsHash { get; set; }
         public HashSet<string> ProcessedEmailIds { get; } = [];
     }
 }

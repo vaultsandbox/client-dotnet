@@ -622,4 +622,34 @@ public class EmailIntegrationTests : IntegrationTestBase
         email.From.Should().Contain(targetFrom);
         email.Subject.Should().Be(subject1);
     }
+
+    [SkippableFact]
+    public async Task EmailGetRawAsync_ShouldReturnRawMimeContent()
+    {
+        SkipIfNotConfigured();
+
+        // Arrange
+        await using var inbox = await Client.CreateInboxAsync();
+        var subject = $"Email GetRaw Test {Guid.NewGuid():N}";
+        var body = "Test body for email.GetRawAsync()";
+        var fromAddress = "raw-test-sender@example.com";
+
+        await SendTestEmailAsync(inbox.EmailAddress, subject, body, from: fromAddress);
+
+        var email = await inbox.WaitForEmailAsync(new WaitForEmailOptions
+        {
+            Subject = subject,
+            Timeout = TimeSpan.FromSeconds(30)
+        });
+
+        // Act - Use the Email instance method (not Inbox.GetEmailRawAsync)
+        var rawContent = await email.GetRawAsync();
+
+        // Assert
+        rawContent.Should().NotBeNullOrEmpty();
+        rawContent.Should().Contain(subject);
+        rawContent.Should().Contain(fromAddress);
+        rawContent.Should().Contain("MIME-Version:");
+        rawContent.Should().Contain("Content-Type:");
+    }
 }

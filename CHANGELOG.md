@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - 2026-01-11
+
+### Removed
+
+- `Auto` delivery strategy (use `Sse` or `Polling` explicitly)
+
+### Changed
+
+- Email sync now uses hash-based comparison for efficient change detection
+- SSE reconnection triggers automatic inbox sync to catch missed emails
+- Duplicate email events are now filtered locally
+
 ## [0.6.0] - 2026-01-04
 
 ### Breaking Changes
