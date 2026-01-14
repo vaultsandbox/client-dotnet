@@ -21,6 +21,19 @@ public interface IInbox : IAsyncDisposable
     string InboxHash { get; }
 
     /// <summary>
+    /// Whether this inbox uses encryption.
+    /// When true, emails are encrypted with ML-KEM-768 and need to be decrypted.
+    /// When false, emails are plain and only need Base64 decoding.
+    /// </summary>
+    bool Encrypted { get; }
+
+    /// <summary>
+    /// Whether email authentication checks (SPF, DKIM, DMARC, PTR) are enabled for this inbox.
+    /// When false, all authentication results return Skipped status.
+    /// </summary>
+    bool EmailAuth { get; }
+
+    /// <summary>
     /// Whether this inbox has been disposed.
     /// </summary>
     bool IsDisposed { get; }

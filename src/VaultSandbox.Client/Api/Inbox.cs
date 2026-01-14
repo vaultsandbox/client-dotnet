@@ -19,8 +19,8 @@ internal sealed class Inbox : IInbox
     private readonly IVaultSandboxApiClient _apiClient;
     private readonly ICryptoProvider _cryptoProvider;
     private readonly IDeliveryStrategy _deliveryStrategy;
-    private readonly MlKemKeyPair _keyPair;
-    private readonly string _serverSigPk;
+    private readonly MlKemKeyPair? _keyPair;
+    private readonly string? _serverSigPk;
     private readonly VaultSandboxClientOptions _options;
     private readonly ILogger<Inbox>? _logger;
 
@@ -32,12 +32,18 @@ internal sealed class Inbox : IInbox
     public string EmailAddress { get; }
     public DateTimeOffset ExpiresAt { get; }
     public string InboxHash { get; }
+    public bool Encrypted { get; }
+    public bool EmailAuth { get; }
     public bool IsDisposed { get; private set; }
 
+    /// <summary>
+    /// Creates an encrypted inbox.
+    /// </summary>
     internal Inbox(
         string emailAddress,
         DateTimeOffset expiresAt,
         string inboxHash,
+        bool emailAuth,
         string serverSigPk,
         MlKemKeyPair keyPair,
         IVaultSandboxApiClient apiClient,
@@ -49,10 +55,45 @@ internal sealed class Inbox : IInbox
         EmailAddress = emailAddress;
         ExpiresAt = expiresAt;
         InboxHash = inboxHash;
+        Encrypted = true;
+        EmailAuth = emailAuth;
         _serverSigPk = serverSigPk;
         _keyPair = keyPair;
         _apiClient = apiClient;
         _cryptoProvider = cryptoProvider;
+        _deliveryStrategy = deliveryStrategy;
+        _options = options;
+        _logger = logger;
+
+        _emailChannel = Channel.CreateUnbounded<Email>(new UnboundedChannelOptions
+        {
+            SingleReader = false,
+            SingleWriter = true
+        });
+    }
+
+    /// <summary>
+    /// Creates a plain (non-encrypted) inbox.
+    /// </summary>
+    internal Inbox(
+        string emailAddress,
+        DateTimeOffset expiresAt,
+        string inboxHash,
+        bool emailAuth,
+        IVaultSandboxApiClient apiClient,
+        IDeliveryStrategy deliveryStrategy,
+        VaultSandboxClientOptions options,
+        ILogger<Inbox>? logger = null)
+    {
+        EmailAddress = emailAddress;
+        ExpiresAt = expiresAt;
+        InboxHash = inboxHash;
+        Encrypted = false;
+        EmailAuth = emailAuth;
+        _serverSigPk = null;
+        _keyPair = null;
+        _apiClient = apiClient;
+        _cryptoProvider = null!; // Not used for plain inboxes
         _deliveryStrategy = deliveryStrategy;
         _options = options;
         _logger = logger;
@@ -71,12 +112,12 @@ internal sealed class Inbox : IInbox
         // Ensure subscribed first - server requires subscription before inbox is active
         await EnsureSubscribedWithDefaultsAsync(ct);
 
-        var encryptedEmails = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: true, ct);
-        var emails = new List<Email>(encryptedEmails.Length);
+        var emailResponses = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: true, ct);
+        var emails = new List<Email>(emailResponses.Length);
 
-        foreach (var encrypted in encryptedEmails)
+        foreach (var response in emailResponses)
         {
-            var email = await DecryptEmailAsync(encrypted, ct);
+            var email = await ProcessEmailResponseAsync(response, ct);
             emails.Add(email);
         }
 
@@ -90,18 +131,18 @@ internal sealed class Inbox : IInbox
         // Ensure subscribed first - server requires subscription before inbox is active
         await EnsureSubscribedWithDefaultsAsync(ct);
 
-        var encryptedEmails = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: false, ct);
-        var emails = new List<EmailMetadata>(encryptedEmails.Length);
+        var emailResponses = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: false, ct);
+        var emails = new List<EmailMetadata>(emailResponses.Length);
 
-        foreach (var encrypted in encryptedEmails)
+        foreach (var response in emailResponses)
         {
-            var metadata = await DecryptMetadataAsync(encrypted.EncryptedMetadata, ct);
+            var metadata = await GetMetadataAsync(response, ct);
             emails.Add(new EmailMetadata(
-                encrypted.Id,
+                response.Id,
                 metadata.From,
                 metadata.Subject,
-                encrypted.ReceivedAt ?? metadata.ReceivedAt ?? DateTimeOffset.UtcNow,
-                encrypted.IsRead));
+                response.ReceivedAt ?? metadata.ReceivedAt ?? DateTimeOffset.UtcNow,
+                response.IsRead));
         }
 
         return emails;
@@ -111,8 +152,8 @@ internal sealed class Inbox : IInbox
     {
         ThrowIfDisposed();
 
-        var encrypted = await _apiClient.GetEmailAsync(EmailAddress, emailId, ct);
-        return await DecryptEmailAsync(encrypted, ct);
+        var response = await _apiClient.GetEmailAsync(EmailAddress, emailId, ct);
+        return await ProcessEmailResponseAsync(response, ct);
     }
 
     public async Task<string> GetEmailRawAsync(string emailId, CancellationToken ct = default)
@@ -121,16 +162,26 @@ internal sealed class Inbox : IInbox
 
         var response = await _apiClient.GetRawEmailAsync(EmailAddress, emailId, ct);
 
-        var rawBytes = await _cryptoProvider.DecryptAsync(
-            response.EncryptedRaw,
-            _keyPair.SecretKey,
-            _serverSigPk,
-            ct);
+        if (response.IsEncrypted)
+        {
+            // Encrypted inbox: decrypt the raw content
+            var rawBytes = await _cryptoProvider.DecryptAsync(
+                response.EncryptedRaw!,
+                _keyPair!.SecretKey,
+                _serverSigPk!,
+                ct);
 
-        // Decrypted content is base64-encoded - decode to get actual raw email
-        var base64String = System.Text.Encoding.UTF8.GetString(rawBytes);
-        var decodedBytes = Convert.FromBase64String(base64String);
-        return System.Text.Encoding.UTF8.GetString(decodedBytes);
+            // Decrypted content is base64-encoded - decode to get actual raw email
+            var base64String = System.Text.Encoding.UTF8.GetString(rawBytes);
+            var decodedBytes = Convert.FromBase64String(base64String);
+            return System.Text.Encoding.UTF8.GetString(decodedBytes);
+        }
+        else
+        {
+            // Plain inbox: decode from Base64
+            var decodedBytes = Convert.FromBase64String(response.Raw!);
+            return System.Text.Encoding.UTF8.GetString(decodedBytes);
+        }
     }
 
     public async Task<Email> WaitForEmailAsync(
@@ -213,8 +264,10 @@ internal sealed class Inbox : IInbox
             EmailAddress = EmailAddress,
             ExpiresAt = ExpiresAt,
             InboxHash = InboxHash,
+            Encrypted = Encrypted,
+            EmailAuth = EmailAuth,
             ServerSigPk = _serverSigPk,
-            SecretKey = Base64Url.Encode(_keyPair.SecretKey),
+            SecretKey = _keyPair is not null ? Base64Url.Encode(_keyPair.SecretKey) : null,
             ExportedAt = DateTimeOffset.UtcNow
         };
 
@@ -363,8 +416,8 @@ internal sealed class Inbox : IInbox
             _logger?.LogDebug("Received email event for {EmailId}", emailEvent.EmailId);
 
             // Fetch full email data
-            var encrypted = await _apiClient.GetEmailAsync(EmailAddress, emailEvent.EmailId);
-            var email = await DecryptEmailAsync(encrypted);
+            var response = await _apiClient.GetEmailAsync(EmailAddress, emailEvent.EmailId);
+            var email = await ProcessEmailResponseAsync(response);
 
             await _emailChannel.Writer.WriteAsync(email);
         }
@@ -425,8 +478,8 @@ internal sealed class Inbox : IInbox
 
                 try
                 {
-                    var encrypted = await _apiClient.GetEmailAsync(EmailAddress, newEmailId);
-                    var email = await DecryptEmailAsync(encrypted);
+                    var response = await _apiClient.GetEmailAsync(EmailAddress, newEmailId);
+                    var email = await ProcessEmailResponseAsync(response);
                     await _emailChannel.Writer.WriteAsync(email);
                 }
                 catch (Exception ex)
@@ -445,44 +498,80 @@ internal sealed class Inbox : IInbox
         }
     }
 
-    private async Task<DecryptedMetadata> DecryptMetadataAsync(
-        EncryptedPayload encryptedMetadata,
+    /// <summary>
+    /// Gets metadata from an email response, handling both encrypted and plain formats.
+    /// </summary>
+    private async Task<DecryptedMetadata> GetMetadataAsync(
+        EmailResponse response,
         CancellationToken ct = default)
     {
-        var metadataBytes = await _cryptoProvider.DecryptAsync(
-            encryptedMetadata,
-            _keyPair.SecretKey,
-            _serverSigPk,
-            ct);
-
-        return System.Text.Json.JsonSerializer.Deserialize(
-            metadataBytes,
-            VaultSandboxJsonContext.Default.DecryptedMetadata)
-            ?? throw new DecryptionException("Failed to deserialize email metadata");
-    }
-
-    private async Task<Email> DecryptEmailAsync(
-        EmailResponse encrypted,
-        CancellationToken ct = default)
-    {
-        var metadata = await DecryptMetadataAsync(encrypted.EncryptedMetadata, ct);
-
-        // Decrypt parsed content
-        DecryptedParsed? parsed = null;
-        if (encrypted.EncryptedParsed is not null)
+        if (response.IsEncrypted)
         {
-            var parsedBytes = await _cryptoProvider.DecryptAsync(
-                encrypted.EncryptedParsed,
-                _keyPair.SecretKey,
-                _serverSigPk,
+            // Encrypted format: decrypt the metadata
+            var metadataBytes = await _cryptoProvider.DecryptAsync(
+                response.EncryptedMetadata!,
+                _keyPair!.SecretKey,
+                _serverSigPk!,
                 ct);
 
-            parsed = System.Text.Json.JsonSerializer.Deserialize(
-                parsedBytes,
-                VaultSandboxJsonContext.Default.DecryptedParsed);
+            return System.Text.Json.JsonSerializer.Deserialize(
+                metadataBytes,
+                VaultSandboxJsonContext.Default.DecryptedMetadata)
+                ?? throw new DecryptionException("Failed to deserialize email metadata");
+        }
+        else
+        {
+            // Plain format: decode from Base64
+            var metadataBytes = Convert.FromBase64String(response.Metadata!);
+
+            return System.Text.Json.JsonSerializer.Deserialize(
+                metadataBytes,
+                VaultSandboxJsonContext.Default.DecryptedMetadata)
+                ?? throw new DecryptionException("Failed to deserialize email metadata");
+        }
+    }
+
+    /// <summary>
+    /// Processes an email response, handling both encrypted and plain formats.
+    /// </summary>
+    private async Task<Email> ProcessEmailResponseAsync(
+        EmailResponse response,
+        CancellationToken ct = default)
+    {
+        var metadata = await GetMetadataAsync(response, ct);
+
+        DecryptedParsed? parsed = null;
+
+        if (response.IsEncrypted)
+        {
+            // Encrypted format: decrypt parsed content if present
+            if (response.EncryptedParsed is not null)
+            {
+                var parsedBytes = await _cryptoProvider.DecryptAsync(
+                    response.EncryptedParsed,
+                    _keyPair!.SecretKey,
+                    _serverSigPk!,
+                    ct);
+
+                parsed = System.Text.Json.JsonSerializer.Deserialize(
+                    parsedBytes,
+                    VaultSandboxJsonContext.Default.DecryptedParsed);
+            }
+        }
+        else
+        {
+            // Plain format: decode parsed content from Base64 if present
+            if (response.Parsed is not null)
+            {
+                var parsedBytes = Convert.FromBase64String(response.Parsed);
+
+                parsed = System.Text.Json.JsonSerializer.Deserialize(
+                    parsedBytes,
+                    VaultSandboxJsonContext.Default.DecryptedParsed);
+            }
         }
 
-        return BuildEmail(encrypted, metadata, parsed);
+        return BuildEmail(response, metadata, parsed);
     }
 
     private Email BuildEmail(

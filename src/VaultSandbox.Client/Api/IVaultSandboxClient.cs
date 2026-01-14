@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace VaultSandbox.Client.Api;
 
 /// <summary>
@@ -100,4 +102,50 @@ public sealed record ServerInfo
     public required int DefaultTtl { get; init; }
     public required bool SseConsole { get; init; }
     public required IReadOnlyList<string> AllowedDomains { get; init; }
+
+    /// <summary>
+    /// Server's encryption policy for inboxes.
+    /// </summary>
+    public required EncryptionPolicy EncryptionPolicy { get; init; }
+
+    /// <summary>
+    /// Whether per-inbox encryption override is allowed (policy is 'enabled' or 'disabled').
+    /// </summary>
+    public bool CanOverrideEncryption => EncryptionPolicy is EncryptionPolicy.Enabled or EncryptionPolicy.Disabled;
+
+    /// <summary>
+    /// Whether encryption is enabled by default (policy is 'always' or 'enabled').
+    /// </summary>
+    public bool DefaultEncrypted => EncryptionPolicy is EncryptionPolicy.Always or EncryptionPolicy.Enabled;
+}
+
+/// <summary>
+/// Server encryption policy for inbox creation.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EncryptionPolicy>))]
+public enum EncryptionPolicy
+{
+    /// <summary>
+    /// All inboxes are encrypted. Per-inbox override is not allowed.
+    /// </summary>
+    [JsonPropertyName("always")]
+    Always,
+
+    /// <summary>
+    /// Inboxes are encrypted by default. Can request plain inboxes.
+    /// </summary>
+    [JsonPropertyName("enabled")]
+    Enabled,
+
+    /// <summary>
+    /// Inboxes are plain by default. Can request encrypted inboxes.
+    /// </summary>
+    [JsonPropertyName("disabled")]
+    Disabled,
+
+    /// <summary>
+    /// All inboxes are plain. Per-inbox override is not allowed.
+    /// </summary>
+    [JsonPropertyName("never")]
+    Never
 }

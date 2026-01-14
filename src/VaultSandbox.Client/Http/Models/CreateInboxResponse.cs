@@ -18,6 +18,22 @@ public sealed record CreateInboxResponse
     [JsonPropertyName("inboxHash")]
     public required string InboxHash { get; init; }
 
+    /// <summary>
+    /// Server's ML-DSA-65 signing public key.
+    /// Only present when the inbox is encrypted.
+    /// </summary>
     [JsonPropertyName("serverSigPk")]
-    public required string ServerSigPk { get; init; }
+    public string? ServerSigPk { get; init; }
+
+    /// <summary>
+    /// Whether email authentication checks are enabled for this inbox.
+    /// </summary>
+    [JsonPropertyName("emailAuth")]
+    public bool EmailAuth { get; init; }
+
+    /// <summary>
+    /// Whether the inbox uses encryption.
+    /// </summary>
+    [JsonPropertyName("encrypted")]
+    public bool Encrypted { get; init; } = true;
 }

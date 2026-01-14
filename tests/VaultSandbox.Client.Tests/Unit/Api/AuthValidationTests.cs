@@ -15,7 +15,7 @@ public class AuthValidationTests
             Spf = new SpfResult { Result = SpfStatus.Pass, Domain = "example.com" },
             Dkim = [new DkimResult { Result = DkimStatus.Pass, Domain = "example.com" }],
             Dmarc = new DmarcResult { Result = DmarcStatus.Pass },
-            ReverseDns = new ReverseDnsResult { Verified = true }
+            ReverseDns = new ReverseDnsResult { Result = ReverseDnsStatus.Pass }
         };
 
         // Act
@@ -172,7 +172,7 @@ public class AuthValidationTests
             Spf = new SpfResult { Result = SpfStatus.Pass },
             Dkim = [new DkimResult { Result = DkimStatus.Pass }],
             Dmarc = new DmarcResult { Result = DmarcStatus.Pass },
-            ReverseDns = new ReverseDnsResult { Verified = false, Hostname = "mail.example.com" }
+            ReverseDns = new ReverseDnsResult { Result = ReverseDnsStatus.Fail, Hostname = "mail.example.com" }
         };
 
         // Act
@@ -195,7 +195,7 @@ public class AuthValidationTests
             Spf = new SpfResult { Result = SpfStatus.Fail, Domain = "example.com" },
             Dkim = [new DkimResult { Result = DkimStatus.Fail, Domain = "example.com" }],
             Dmarc = new DmarcResult { Result = DmarcStatus.Fail },
-            ReverseDns = new ReverseDnsResult { Verified = false }
+            ReverseDns = new ReverseDnsResult { Result = ReverseDnsStatus.Fail }
         };
 
         // Act
@@ -261,5 +261,155 @@ public class AuthValidationTests
 
         // Assert
         validation.DkimPassed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_SpfSkipped_DoesNotAddFailure()
+    {
+        // Arrange
+        var authResults = new AuthenticationResults
+        {
+            Spf = new SpfResult { Result = SpfStatus.Skipped },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
+        };
+
+        // Act
+        var validation = authResults.Validate();
+
+        // Assert
+        validation.SpfPassed.Should().BeFalse("Skipped is not a pass");
+        validation.Failures.Should().BeEmpty("Skipped should not add a failure");
+    }
+
+    [Fact]
+    public void Validate_DkimSkipped_DoesNotAddFailure()
+    {
+        // Arrange
+        var authResults = new AuthenticationResults
+        {
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim = [new DkimResult { Result = DkimStatus.Skipped }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
+        };
+
+        // Act
+        var validation = authResults.Validate();
+
+        // Assert
+        validation.DkimPassed.Should().BeFalse("Skipped is not a pass");
+        validation.Failures.Should().BeEmpty("Skipped should not add a failure");
+    }
+
+    [Fact]
+    public void Validate_DmarcSkipped_DoesNotAddFailure()
+    {
+        // Arrange
+        var authResults = new AuthenticationResults
+        {
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Skipped }
+        };
+
+        // Act
+        var validation = authResults.Validate();
+
+        // Assert
+        validation.DmarcPassed.Should().BeFalse("Skipped is not a pass");
+        validation.Failures.Should().BeEmpty("Skipped should not add a failure");
+    }
+
+    [Fact]
+    public void Validate_ReverseDnsSkipped_DoesNotAddFailure()
+    {
+        // Arrange
+        var authResults = new AuthenticationResults
+        {
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim = [new DkimResult { Result = DkimStatus.Pass }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass },
+            ReverseDns = new ReverseDnsResult { Result = ReverseDnsStatus.Skipped }
+        };
+
+        // Act
+        var validation = authResults.Validate();
+
+        // Assert
+        validation.ReverseDnsPassed.Should().BeFalse("Skipped is not a pass");
+        validation.Passed.Should().BeTrue("ReverseDns doesn't affect overall Passed");
+        validation.Failures.Should().BeEmpty("Skipped should not add a failure");
+    }
+
+    [Fact]
+    public void Validate_AllSkipped_NoFailuresReported()
+    {
+        // Arrange
+        var authResults = new AuthenticationResults
+        {
+            Spf = new SpfResult { Result = SpfStatus.Skipped },
+            Dkim = [new DkimResult { Result = DkimStatus.Skipped }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Skipped },
+            ReverseDns = new ReverseDnsResult { Result = ReverseDnsStatus.Skipped }
+        };
+
+        // Act
+        var validation = authResults.Validate();
+
+        // Assert
+        validation.Passed.Should().BeFalse("Skipped doesn't count as passed");
+        validation.SpfPassed.Should().BeFalse();
+        validation.DkimPassed.Should().BeFalse();
+        validation.DmarcPassed.Should().BeFalse();
+        validation.ReverseDnsPassed.Should().BeFalse();
+        validation.Failures.Should().BeEmpty("Skipped status should not add failures");
+    }
+
+    [Fact]
+    public void Validate_MixedSkippedAndFail_OnlyReportsActualFailures()
+    {
+        // Arrange
+        var authResults = new AuthenticationResults
+        {
+            Spf = new SpfResult { Result = SpfStatus.Skipped },
+            Dkim = [new DkimResult { Result = DkimStatus.Fail, Domain = "example.com" }],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Skipped },
+            ReverseDns = new ReverseDnsResult { Result = ReverseDnsStatus.Fail }
+        };
+
+        // Act
+        var validation = authResults.Validate();
+
+        // Assert
+        validation.Passed.Should().BeFalse();
+        validation.Failures.Should().HaveCount(2); // Only DKIM and ReverseDns failures
+        validation.Failures.Should().Contain(f => f.Contains("DKIM"));
+        validation.Failures.Should().Contain(f => f.Contains("Reverse DNS"));
+        validation.Failures.Should().NotContain(f => f.Contains("SPF"));
+        validation.Failures.Should().NotContain(f => f.Contains("DMARC"));
+    }
+
+    [Fact]
+    public void Validate_DkimMixedPassAndSkipped_ReportsPass()
+    {
+        // Arrange - One DKIM passed, one skipped
+        var authResults = new AuthenticationResults
+        {
+            Spf = new SpfResult { Result = SpfStatus.Pass },
+            Dkim =
+            [
+                new DkimResult { Result = DkimStatus.Pass, Domain = "good.com" },
+                new DkimResult { Result = DkimStatus.Skipped }
+            ],
+            Dmarc = new DmarcResult { Result = DmarcStatus.Pass }
+        };
+
+        // Act
+        var validation = authResults.Validate();
+
+        // Assert
+        validation.DkimPassed.Should().BeTrue("At least one DKIM passed");
+        validation.Passed.Should().BeTrue();
+        validation.Failures.Should().BeEmpty();
     }
 }

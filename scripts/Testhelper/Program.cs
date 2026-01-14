@@ -67,6 +67,7 @@ async Task CreateInbox(IVaultSandboxClient client)
         emailAddress = exported.EmailAddress,
         expiresAt = exported.ExpiresAt.ToString("O"),
         inboxHash = exported.InboxHash,
+        encrypted = exported.Encrypted,
         serverSigPk = exported.ServerSigPk,
         secretKey = exported.SecretKey,
         exportedAt = exported.ExportedAt.ToString("O")

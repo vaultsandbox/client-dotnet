@@ -54,6 +54,7 @@ public class InboxTests
             TestEmailAddress,
             DateTimeOffset.UtcNow.AddHours(1),
             TestInboxHash,
+            emailAuth: true,
             TestServerSigPk,
             _keyPair,
             _mockApiClient.Object,
@@ -144,6 +145,7 @@ public class InboxTests
             TestEmailAddress,
             expiresAt,
             TestInboxHash,
+            emailAuth: true,
             TestServerSigPk,
             _keyPair,
             _mockApiClient.Object,
@@ -403,6 +405,7 @@ public class InboxTests
             TestEmailAddress,
             expiresAt,
             TestInboxHash,
+            emailAuth: true,
             TestServerSigPk,
             _keyPair,
             _mockApiClient.Object,
@@ -1900,6 +1903,445 @@ public class InboxTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => callCount++ % 2 == 0 ? metadataBytes : parsedBytes);
+    }
+
+    #endregion
+
+    #region Plain (Non-Encrypted) Inbox Tests
+
+    private Inbox CreatePlainInbox(ILogger<Inbox>? logger = null)
+    {
+        return new Inbox(
+            TestEmailAddress,
+            DateTimeOffset.UtcNow.AddHours(1),
+            TestInboxHash,
+            emailAuth: true,
+            _mockApiClient.Object,
+            _mockDeliveryStrategy.Object,
+            _options,
+            logger);
+    }
+
+    private static EmailResponse CreatePlainEmailResponse(string id = "email-1")
+    {
+        var metadata = new DecryptedMetadata
+        {
+            From = "sender@example.com",
+            To = [TestEmailAddress],
+            Subject = "Test Subject",
+            ReceivedAt = DateTimeOffset.UtcNow
+        };
+
+        var parsed = new DecryptedParsed
+        {
+            Text = "Test body text",
+            Html = "<p>Test body HTML</p>"
+        };
+
+        var metadataJson = JsonSerializer.SerializeToUtf8Bytes(metadata, VaultSandboxJsonContext.Default.DecryptedMetadata);
+        var parsedJson = JsonSerializer.SerializeToUtf8Bytes(parsed, VaultSandboxJsonContext.Default.DecryptedParsed);
+
+        return new EmailResponse
+        {
+            Id = id,
+            InboxId = TestInboxHash,
+            ReceivedAt = DateTimeOffset.UtcNow,
+            IsRead = false,
+            Metadata = Convert.ToBase64String(metadataJson),
+            Parsed = Convert.ToBase64String(parsedJson)
+        };
+    }
+
+    [Fact]
+    public void PlainInbox_Constructor_SetsPropertiesCorrectly()
+    {
+        // Arrange
+        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+
+        // Act
+        var inbox = new Inbox(
+            TestEmailAddress,
+            expiresAt,
+            TestInboxHash,
+            emailAuth: true,
+            _mockApiClient.Object,
+            _mockDeliveryStrategy.Object,
+            _options);
+
+        // Assert
+        inbox.EmailAddress.Should().Be(TestEmailAddress);
+        inbox.ExpiresAt.Should().Be(expiresAt);
+        inbox.InboxHash.Should().Be(TestInboxHash);
+        inbox.Encrypted.Should().BeFalse();
+        inbox.IsDisposed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EncryptedInbox_Constructor_SetsEncryptedTrue()
+    {
+        // Arrange & Act
+        var inbox = CreateInbox();
+
+        // Assert
+        inbox.Encrypted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PlainInbox_GetEmailsAsync_DecodesBase64Emails()
+    {
+        // Arrange
+        var inbox = CreatePlainInbox();
+        var emailResponses = new[] { CreatePlainEmailResponse("email-1"), CreatePlainEmailResponse("email-2") };
+
+        _mockApiClient
+            .Setup(x => x.GetEmailsAsync(TestEmailAddress, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(emailResponses);
+
+        // Act
+        var emails = await inbox.GetEmailsAsync();
+
+        // Assert
+        emails.Should().HaveCount(2);
+        emails[0].From.Should().Be("sender@example.com");
+        emails[0].Subject.Should().Be("Test Subject");
+        emails[0].Text.Should().Be("Test body text");
+        emails[0].Html.Should().Be("<p>Test body HTML</p>");
+
+        // Verify crypto provider was NOT called (plain emails don't need decryption)
+        _mockCryptoProvider.Verify(
+            x => x.DecryptAsync(
+                It.IsAny<EncryptedPayload>(),
+                It.IsAny<byte[]>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task PlainInbox_GetEmailAsync_DecodesBase64Email()
+    {
+        // Arrange
+        var inbox = CreatePlainInbox();
+        var emailId = "test-email-id";
+
+        _mockApiClient
+            .Setup(x => x.GetEmailAsync(TestEmailAddress, emailId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreatePlainEmailResponse(emailId));
+
+        // Act
+        var email = await inbox.GetEmailAsync(emailId);
+
+        // Assert
+        email.Id.Should().Be(emailId);
+        email.From.Should().Be("sender@example.com");
+        email.Subject.Should().Be("Test Subject");
+
+        // Verify crypto provider was NOT called
+        _mockCryptoProvider.Verify(
+            x => x.DecryptAsync(
+                It.IsAny<EncryptedPayload>(),
+                It.IsAny<byte[]>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task PlainInbox_GetEmailsMetadataOnlyAsync_DecodesBase64Metadata()
+    {
+        // Arrange
+        var inbox = CreatePlainInbox();
+
+        var metadata = new DecryptedMetadata
+        {
+            From = "sender@example.com",
+            To = [TestEmailAddress],
+            Subject = "Metadata Only Subject",
+            ReceivedAt = DateTimeOffset.UtcNow
+        };
+        var metadataJson = JsonSerializer.SerializeToUtf8Bytes(metadata, VaultSandboxJsonContext.Default.DecryptedMetadata);
+
+        var response = new EmailResponse
+        {
+            Id = "email-1",
+            InboxId = TestInboxHash,
+            ReceivedAt = DateTimeOffset.UtcNow,
+            IsRead = false,
+            Metadata = Convert.ToBase64String(metadataJson),
+            Parsed = null // No parsed content for metadata-only
+        };
+
+        _mockApiClient
+            .Setup(x => x.GetEmailsAsync(TestEmailAddress, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([response]);
+
+        // Act
+        var metadataList = await inbox.GetEmailsMetadataOnlyAsync();
+
+        // Assert
+        metadataList.Should().HaveCount(1);
+        metadataList[0].From.Should().Be("sender@example.com");
+        metadataList[0].Subject.Should().Be("Metadata Only Subject");
+    }
+
+    [Fact]
+    public async Task PlainInbox_GetEmailRawAsync_DecodesBase64Raw()
+    {
+        // Arrange
+        var inbox = CreatePlainInbox();
+        var emailId = "test-email-id";
+        var rawContent = "From: sender@example.com\r\nTo: test@example.com\r\nSubject: Test\r\n\r\nBody";
+
+        var rawResponse = new RawEmailResponse
+        {
+            Id = emailId,
+            Raw = Convert.ToBase64String(Encoding.UTF8.GetBytes(rawContent))
+        };
+
+        _mockApiClient
+            .Setup(x => x.GetRawEmailAsync(TestEmailAddress, emailId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rawResponse);
+
+        // Act
+        var raw = await inbox.GetEmailRawAsync(emailId);
+
+        // Assert
+        raw.Should().Be(rawContent);
+
+        // Verify crypto provider was NOT called
+        _mockCryptoProvider.Verify(
+            x => x.DecryptAsync(
+                It.IsAny<EncryptedPayload>(),
+                It.IsAny<byte[]>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task PlainInbox_ExportAsync_ReturnsExportWithoutSecretKey()
+    {
+        // Arrange
+        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var inbox = new Inbox(
+            TestEmailAddress,
+            expiresAt,
+            TestInboxHash,
+            emailAuth: true,
+            _mockApiClient.Object,
+            _mockDeliveryStrategy.Object,
+            _options);
+
+        // Act
+        var export = await inbox.ExportAsync();
+
+        // Assert
+        export.Version.Should().Be(1);
+        export.EmailAddress.Should().Be(TestEmailAddress);
+        export.ExpiresAt.Should().Be(expiresAt);
+        export.InboxHash.Should().Be(TestInboxHash);
+        export.Encrypted.Should().BeFalse();
+        export.ServerSigPk.Should().BeNull();
+        export.SecretKey.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task EncryptedInbox_ExportAsync_ReturnsExportWithSecretKey()
+    {
+        // Arrange
+        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var inbox = new Inbox(
+            TestEmailAddress,
+            expiresAt,
+            TestInboxHash,
+            emailAuth: true,
+            TestServerSigPk,
+            _keyPair,
+            _mockApiClient.Object,
+            _mockCryptoProvider.Object,
+            _mockDeliveryStrategy.Object,
+            _options);
+
+        // Act
+        var export = await inbox.ExportAsync();
+
+        // Assert
+        export.Encrypted.Should().BeTrue();
+        export.ServerSigPk.Should().Be(TestServerSigPk);
+        export.SecretKey.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task PlainInbox_OnEmailReceived_DecodesPlainSseEvent()
+    {
+        // Arrange
+        var inbox = CreatePlainInbox();
+        Func<SseEmailEvent, Task>? capturedOnEmail = null;
+
+        _mockDeliveryStrategy
+            .Setup(x => x.SubscribeAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<Func<SseEmailEvent, Task>>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<Func<Task>?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, Func<SseEmailEvent, Task>, TimeSpan, Func<Task>?, CancellationToken>(
+                (_, _, onEmail, _, _, _) => capturedOnEmail = onEmail)
+            .Returns(Task.CompletedTask);
+
+        _mockApiClient
+            .Setup(x => x.GetEmailsAsync(TestEmailAddress, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<EmailResponse>());
+
+        _mockApiClient
+            .Setup(x => x.GetEmailAsync(TestEmailAddress, "plain-sse-email", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreatePlainEmailResponse("plain-sse-email"));
+
+        await inbox.GetEmailsAsync();
+
+        // Act - Simulate plain SSE event
+        capturedOnEmail.Should().NotBeNull();
+
+        var metadata = new DecryptedMetadata
+        {
+            From = "sender@example.com",
+            To = [TestEmailAddress],
+            Subject = "SSE Event Subject",
+            ReceivedAt = DateTimeOffset.UtcNow
+        };
+        var metadataJson = JsonSerializer.SerializeToUtf8Bytes(metadata, VaultSandboxJsonContext.Default.DecryptedMetadata);
+
+        var emailEvent = new SseEmailEvent
+        {
+            InboxId = TestInboxHash,
+            EmailId = "plain-sse-email",
+            Metadata = Convert.ToBase64String(metadataJson) // Plain format
+        };
+
+        await capturedOnEmail!(emailEvent);
+
+        // Assert - Email was fetched and processed
+        _mockApiClient.Verify(
+            x => x.GetEmailAsync(TestEmailAddress, "plain-sse-email", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PlainInbox_HandlesNullParsed()
+    {
+        // Arrange
+        var inbox = CreatePlainInbox();
+
+        var metadata = new DecryptedMetadata
+        {
+            From = "sender@example.com",
+            To = [TestEmailAddress],
+            Subject = "No Parsed Content",
+            ReceivedAt = DateTimeOffset.UtcNow
+        };
+        var metadataJson = JsonSerializer.SerializeToUtf8Bytes(metadata, VaultSandboxJsonContext.Default.DecryptedMetadata);
+
+        var response = new EmailResponse
+        {
+            Id = "email-without-parsed",
+            InboxId = TestInboxHash,
+            ReceivedAt = DateTimeOffset.UtcNow,
+            IsRead = false,
+            Metadata = Convert.ToBase64String(metadataJson),
+            Parsed = null // No parsed content
+        };
+
+        _mockApiClient
+            .Setup(x => x.GetEmailAsync(TestEmailAddress, "email-without-parsed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response);
+
+        // Act
+        var email = await inbox.GetEmailAsync("email-without-parsed");
+
+        // Assert
+        email.From.Should().Be("sender@example.com");
+        email.Subject.Should().Be("No Parsed Content");
+        email.Text.Should().BeNull();
+        email.Html.Should().BeNull();
+    }
+
+    [Fact]
+    public void EmailResponse_IsEncrypted_ReturnsTrueWhenEncryptedMetadataPresent()
+    {
+        // Arrange
+        var encryptedResponse = CreateEmailResponse();
+
+        // Act & Assert
+        encryptedResponse.IsEncrypted.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EmailResponse_IsEncrypted_ReturnsFalseWhenOnlyPlainMetadataPresent()
+    {
+        // Arrange
+        var plainResponse = CreatePlainEmailResponse();
+
+        // Act & Assert
+        plainResponse.IsEncrypted.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RawEmailResponse_IsEncrypted_ReturnsTrueWhenEncryptedRawPresent()
+    {
+        // Arrange
+        var response = new RawEmailResponse
+        {
+            Id = "test",
+            EncryptedRaw = CreateEncryptedPayload()
+        };
+
+        // Act & Assert
+        response.IsEncrypted.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RawEmailResponse_IsEncrypted_ReturnsFalseWhenOnlyRawPresent()
+    {
+        // Arrange
+        var response = new RawEmailResponse
+        {
+            Id = "test",
+            Raw = "base64content"
+        };
+
+        // Act & Assert
+        response.IsEncrypted.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SseEmailEvent_IsEncrypted_ReturnsTrueWhenEncryptedMetadataPresent()
+    {
+        // Arrange
+        var evt = new SseEmailEvent
+        {
+            InboxId = "inbox",
+            EmailId = "email",
+            EncryptedMetadata = CreateEncryptedPayload()
+        };
+
+        // Act & Assert
+        evt.IsEncrypted.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SseEmailEvent_IsEncrypted_ReturnsFalseWhenOnlyPlainMetadataPresent()
+    {
+        // Arrange
+        var evt = new SseEmailEvent
+        {
+            InboxId = "inbox",
+            EmailId = "email",
+            Metadata = "base64metadata"
+        };
+
+        // Act & Assert
+        evt.IsEncrypted.Should().BeFalse();
     }
 
     #endregion

@@ -27,7 +27,8 @@ public enum SpfStatus
     Neutral,
     None,
     TempError,
-    PermError
+    PermError,
+    Skipped
 }
 
 /// <summary>
@@ -49,7 +50,8 @@ public enum DkimStatus
 {
     Pass,
     Fail,
-    None
+    None,
+    Skipped
 }
 
 /// <summary>
@@ -73,7 +75,8 @@ public enum DmarcStatus
 {
     Pass,
     Fail,
-    None
+    None,
+    Skipped
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DmarcPolicy>))]
@@ -84,12 +87,24 @@ public enum DmarcPolicy
     Reject
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<ReverseDnsStatus>))]
+public enum ReverseDnsStatus
+{
+    Pass,
+    Fail,
+    None,
+    Skipped
+}
+
 /// <summary>
 /// Reverse DNS verification result.
 /// </summary>
 public sealed record ReverseDnsResult
 {
-    public bool Verified { get; init; }
+    [JsonPropertyName("result")]
+    [JsonConverter(typeof(JsonStringEnumConverter<ReverseDnsStatus>))]
+    public ReverseDnsStatus Result { get; init; } = ReverseDnsStatus.None;
+
     public string? Ip { get; init; }
     public string? Hostname { get; init; }
 }
@@ -112,36 +127,40 @@ public sealed record AuthenticationResults
     {
         var failures = new List<string>();
 
-        // Check SPF
+        // Check SPF (skipped is treated as informational, not a failure)
         var spfPassed = Spf?.Result == SpfStatus.Pass;
-        if (Spf is not null && !spfPassed)
+        var spfSkipped = Spf?.Result == SpfStatus.Skipped;
+        if (Spf is not null && !spfPassed && !spfSkipped)
         {
             var domain = Spf.Domain is not null ? $" (domain: {Spf.Domain})" : "";
             failures.Add($"SPF check failed: {Spf.Result}{domain}");
         }
 
-        // Check DKIM (at least one signature must pass)
+        // Check DKIM (at least one signature must pass, skipped is informational)
         var dkimPassed = Dkim?.Any(d => d.Result == DkimStatus.Pass) ?? false;
-        if (Dkim is { Count: > 0 } && !dkimPassed)
+        var dkimAllSkipped = Dkim?.All(d => d.Result == DkimStatus.Skipped) ?? false;
+        if (Dkim is { Count: > 0 } && !dkimPassed && !dkimAllSkipped)
         {
             var failedDomains = string.Join(", ",
-                Dkim.Where(d => d.Result != DkimStatus.Pass && d.Domain is not null)
+                Dkim.Where(d => d.Result != DkimStatus.Pass && d.Result != DkimStatus.Skipped && d.Domain is not null)
                     .Select(d => d.Domain));
             var domainInfo = string.IsNullOrEmpty(failedDomains) ? "" : $": {failedDomains}";
             failures.Add($"DKIM signature failed{domainInfo}");
         }
 
-        // Check DMARC
+        // Check DMARC (skipped is informational)
         var dmarcPassed = Dmarc?.Result == DmarcStatus.Pass;
-        if (Dmarc is not null && !dmarcPassed)
+        var dmarcSkipped = Dmarc?.Result == DmarcStatus.Skipped;
+        if (Dmarc is not null && !dmarcPassed && !dmarcSkipped)
         {
             var policy = Dmarc.Policy is not null ? $" (policy: {Dmarc.Policy})" : "";
             failures.Add($"DMARC policy: {Dmarc.Result}{policy}");
         }
 
-        // Check Reverse DNS - uses Verified boolean directly
-        var reverseDnsPassed = ReverseDns?.Verified == true;
-        if (ReverseDns is not null && !reverseDnsPassed)
+        // Check Reverse DNS (skipped is informational)
+        var reverseDnsPassed = ReverseDns?.Result == ReverseDnsStatus.Pass;
+        var reverseDnsSkipped = ReverseDns?.Result == ReverseDnsStatus.Skipped;
+        if (ReverseDns is not null && !reverseDnsPassed && !reverseDnsSkipped)
         {
             var hostname = ReverseDns.Hostname is not null
                 ? $" (hostname: {ReverseDns.Hostname})"

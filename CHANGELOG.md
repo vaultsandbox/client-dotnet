@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-01-13
+
+### Added
+
+- Optional encryption support with `encryptionPolicy` option
+- Optional email authentication feature
+
+### Changed
+
+- Updated ReverseDNS structure
+- License changed from MIT to Apache 2.0
+
 ## [0.6.1] - 2026-01-11
 
 ### Removed

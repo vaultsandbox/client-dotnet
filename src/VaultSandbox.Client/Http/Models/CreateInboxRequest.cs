@@ -9,8 +9,13 @@ namespace VaultSandbox.Client.Http.Models;
 [ExcludeFromCodeCoverage]
 public sealed record CreateInboxRequest
 {
+    /// <summary>
+    /// Client's ML-KEM-768 public key (base64url-encoded).
+    /// Required when encryption is enabled for the inbox.
+    /// </summary>
     [JsonPropertyName("clientKemPk")]
-    public required string ClientKemPk { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ClientKemPk { get; init; }
 
     [JsonPropertyName("ttl")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -19,4 +24,20 @@ public sealed record CreateInboxRequest
     [JsonPropertyName("emailAddress")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? EmailAddress { get; init; }
+
+    /// <summary>
+    /// Whether to enable email authentication checks (SPF, DKIM, DMARC, PTR) for this inbox.
+    /// If not specified, the server default is used.
+    /// </summary>
+    [JsonPropertyName("emailAuth")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? EmailAuth { get; init; }
+
+    /// <summary>
+    /// Requested encryption mode for the inbox. If omitted, the server uses its default based on policy.
+    /// Only applicable when the server policy allows overrides ('enabled' or 'disabled').
+    /// </summary>
+    [JsonPropertyName("encryption")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Encryption { get; init; }
 }

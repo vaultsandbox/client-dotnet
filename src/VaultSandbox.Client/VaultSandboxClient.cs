@@ -78,48 +78,96 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
 
         try
         {
-            // Generate ML-KEM-768 keypair
-            var keyPair = _cryptoProvider.GenerateKeyPair();
-
-            Log.Debug(_logger, "Generated ML-KEM-768 keypair for new inbox");
-
             // Calculate TTL in seconds (use default from options if not specified)
             int ttlSeconds = options?.Ttl is not null
                 ? (int)options.Ttl.Value.TotalSeconds
                 : _options.DefaultInboxTtlSeconds;
 
+            // Determine encryption mode
+            string? encryptionParam = options?.Encryption switch
+            {
+                InboxEncryption.Encrypted => "encrypted",
+                InboxEncryption.Plain => "plain",
+                _ => null
+            };
+
+            // Generate keypair only if we need encryption
+            // If explicitly requesting plain, don't generate keys
+            // If no encryption specified, generate keys (server will decide based on policy)
+            MlKemKeyPair? keyPair = null;
+            if (options?.Encryption != InboxEncryption.Plain)
+            {
+                keyPair = _cryptoProvider.GenerateKeyPair();
+                Log.Debug(_logger, "Generated ML-KEM-768 keypair for new inbox");
+            }
+
             // Create inbox on server
             var request = new CreateInboxRequest
             {
-                ClientKemPk = keyPair.PublicKeyB64,
+                ClientKemPk = keyPair?.PublicKeyB64,
                 Ttl = ttlSeconds,
-                EmailAddress = options?.EmailAddress
+                EmailAddress = options?.EmailAddress,
+                EmailAuth = options?.EmailAuth,
+                Encryption = encryptionParam
             };
 
             var response = await _apiClient.CreateInboxAsync(request, ct);
 
             Information(_logger, "Created inbox {EmailAddress} (expires: {ExpiresAt})",
                 response.EmailAddress, response.ExpiresAt);
+            Debug(_logger, "Inbox encryption: {Encrypted}", response.Encrypted);
 
             activity?.SetTag("vaultsandbox.inbox.email", response.EmailAddress);
             activity?.SetTag("vaultsandbox.inbox.hash", response.InboxHash);
+            activity?.SetTag("vaultsandbox.inbox.encrypted", response.Encrypted);
             VaultSandboxTelemetry.InboxesCreated.Add(1);
 
             // Create delivery strategy for this inbox
             var strategy = _deliveryStrategyFactory.Create(_options.DefaultDeliveryStrategy);
             _strategies[response.InboxHash] = strategy;
 
-            return new Inbox(
-                response.EmailAddress,
-                response.ExpiresAt,
-                response.InboxHash,
-                response.ServerSigPk,
-                keyPair,
-                _apiClient,
-                _cryptoProvider,
-                strategy,
-                _options,
-                _loggerFactory?.CreateLogger<Inbox>());
+            if (response.Encrypted)
+            {
+                // Encrypted inbox - requires keypair and server signing key
+                if (keyPair is null)
+                {
+                    throw new InvalidOperationException(
+                        "Server created an encrypted inbox but no keypair was generated. " +
+                        "This may indicate a server policy mismatch.");
+                }
+
+                if (response.ServerSigPk is null)
+                {
+                    throw new InvalidOperationException(
+                        "Server created an encrypted inbox but did not return serverSigPk.");
+                }
+
+                return new Inbox(
+                    response.EmailAddress,
+                    response.ExpiresAt,
+                    response.InboxHash,
+                    response.EmailAuth,
+                    response.ServerSigPk,
+                    keyPair,
+                    _apiClient,
+                    _cryptoProvider,
+                    strategy,
+                    _options,
+                    _loggerFactory?.CreateLogger<Inbox>());
+            }
+            else
+            {
+                // Plain inbox - no encryption needed
+                return new Inbox(
+                    response.EmailAddress,
+                    response.ExpiresAt,
+                    response.InboxHash,
+                    response.EmailAuth,
+                    _apiClient,
+                    strategy,
+                    _options,
+                    _loggerFactory?.CreateLogger<Inbox>());
+            }
         }
         catch (Exception ex)
         {
@@ -207,10 +255,6 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
             throw new InvalidImportDataException("EmailAddress is required");
         if (string.IsNullOrEmpty(export.InboxHash))
             throw new InvalidImportDataException("InboxHash is required");
-        if (string.IsNullOrEmpty(export.SecretKey))
-            throw new InvalidImportDataException("SecretKey is required");
-        if (string.IsNullOrEmpty(export.ServerSigPk))
-            throw new InvalidImportDataException("ServerSigPk is required");
 
         // Step 4: Validate emailAddress format (must contain exactly one @)
         int atCount = export.EmailAddress.Count(c => c == '@');
@@ -221,6 +265,34 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
         // Check expiration
         if (export.ExpiresAt < DateTimeOffset.UtcNow)
             throw new InvalidImportDataException("Inbox has expired");
+
+        // Create delivery strategy for this inbox
+        var strategy = _deliveryStrategyFactory.Create(_options.DefaultDeliveryStrategy);
+        _strategies[export.InboxHash] = strategy;
+
+        // Handle plain (non-encrypted) inbox
+        if (!export.Encrypted)
+        {
+            Information(_logger, "Imported plain inbox {EmailAddress}", export.EmailAddress);
+
+            var plainInbox = new Inbox(
+                export.EmailAddress,
+                export.ExpiresAt,
+                export.InboxHash,
+                export.EmailAuth,
+                _apiClient,
+                strategy,
+                _options,
+                _loggerFactory?.CreateLogger<Inbox>());
+
+            return Task.FromResult<IInbox>(plainInbox);
+        }
+
+        // Handle encrypted inbox - validate encryption-specific fields
+        if (string.IsNullOrEmpty(export.SecretKey))
+            throw new InvalidImportDataException("SecretKey is required for encrypted inbox");
+        if (string.IsNullOrEmpty(export.ServerSigPk))
+            throw new InvalidImportDataException("ServerSigPk is required for encrypted inbox");
 
         // Step 6: Validate and decode secretKey
         byte[] secretKey;
@@ -262,16 +334,13 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
             SecretKey = secretKey
         };
 
-        Information(_logger, "Imported inbox {EmailAddress}", export.EmailAddress);
-
-        // Create delivery strategy for this inbox
-        var strategy = _deliveryStrategyFactory.Create(_options.DefaultDeliveryStrategy);
-        _strategies[export.InboxHash] = strategy;
+        Information(_logger, "Imported encrypted inbox {EmailAddress}", export.EmailAddress);
 
         var inbox = new Inbox(
             export.EmailAddress,
             export.ExpiresAt,
             export.InboxHash,
+            export.EmailAuth,
             export.ServerSigPk,
             keyPair,
             _apiClient,
@@ -321,7 +390,8 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 MaxTtl = response.MaxTtl,
                 DefaultTtl = response.DefaultTtl,
                 SseConsole = response.SseConsole,
-                AllowedDomains = response.AllowedDomains
+                AllowedDomains = response.AllowedDomains,
+                EncryptionPolicy = response.EncryptionPolicy
             };
         }
         catch (Exception ex)

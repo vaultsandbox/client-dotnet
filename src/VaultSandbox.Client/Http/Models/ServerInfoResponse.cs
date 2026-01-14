@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
+using VaultSandbox.Client.Api;
 
 namespace VaultSandbox.Client.Http.Models;
 
@@ -29,6 +30,12 @@ public sealed record ServerInfoResponse
 
     [JsonPropertyName("allowedDomains")]
     public required string[] AllowedDomains { get; init; }
+
+    /// <summary>
+    /// Server's encryption policy for inboxes.
+    /// </summary>
+    [JsonPropertyName("encryptionPolicy")]
+    public EncryptionPolicy EncryptionPolicy { get; init; } = EncryptionPolicy.Always;
 }
 
 /// <summary>

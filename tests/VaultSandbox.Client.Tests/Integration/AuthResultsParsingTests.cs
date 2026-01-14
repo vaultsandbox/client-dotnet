@@ -56,7 +56,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
                 spf = "pass",
                 dkim = "pass",
                 dmarc = "pass",
-                reverseDns = true
+                reverseDns = "pass"
             }
         });
 
@@ -87,7 +87,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
         auth.Dmarc!.Result.Should().Be(DmarcStatus.Pass, "DMARC Result property should deserialize correctly");
 
         auth.ReverseDns.Should().NotBeNull("ReverseDNS result should be present");
-        auth.ReverseDns!.Verified.Should().BeTrue("ReverseDNS Verified should be true");
+        auth.ReverseDns!.Result.Should().Be(ReverseDnsStatus.Pass, "ReverseDNS Result should be Pass");
 
         // Validate using the Validate() method
         var validation = auth.Validate();
@@ -246,7 +246,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
         {
             to = inbox.EmailAddress,
             subject = $"ReverseDNS Fail Test {Guid.NewGuid():N}",
-            auth = new { reverseDns = false }
+            auth = new { reverseDns = "fail" }
         });
 
         Skip.If(!response.IsSuccessStatusCode && response.StatusCode == System.Net.HttpStatusCode.NotFound,
@@ -262,7 +262,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
         // Assert
         email.AuthResults.Should().NotBeNull();
         email.AuthResults!.ReverseDns.Should().NotBeNull();
-        email.AuthResults.ReverseDns!.Verified.Should().BeFalse();
+        email.AuthResults.ReverseDns!.Result.Should().Be(ReverseDnsStatus.Fail);
 
         var validation = email.AuthResults.Validate();
         validation.ReverseDnsPassed.Should().BeFalse();
@@ -286,7 +286,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
                 spf = "fail",
                 dkim = "fail",
                 dmarc = "fail",
-                reverseDns = false
+                reverseDns = "fail"
             }
         });
 
@@ -305,7 +305,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
         auth.Spf!.Result.Should().Be(SpfStatus.Fail);
         auth.Dkim![0].Result.Should().Be(DkimStatus.Fail);
         auth.Dmarc!.Result.Should().Be(DmarcStatus.Fail);
-        auth.ReverseDns!.Verified.Should().BeFalse();
+        auth.ReverseDns!.Result.Should().Be(ReverseDnsStatus.Fail);
 
         // Validate() should report 4 failures
         var validation = auth.Validate();
@@ -334,7 +334,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
                 spf = "softfail",
                 dkim = "pass",
                 dmarc = "fail",
-                reverseDns = true
+                reverseDns = "pass"
             }
         });
 
@@ -353,7 +353,7 @@ public class AuthResultsParsingTests : IntegrationTestBase
         auth.Spf!.Result.Should().Be(SpfStatus.SoftFail);
         auth.Dkim![0].Result.Should().Be(DkimStatus.Pass);
         auth.Dmarc!.Result.Should().Be(DmarcStatus.Fail);
-        auth.ReverseDns!.Verified.Should().BeTrue();
+        auth.ReverseDns!.Result.Should().Be(ReverseDnsStatus.Pass);
 
         var validation = auth.Validate();
         validation.Passed.Should().BeFalse("SPF softfail and DMARC fail should cause overall failure");
