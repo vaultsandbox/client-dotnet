@@ -4,7 +4,7 @@
     <RootNamespace>VaultSandbox.Client</RootNamespace>
     <AssemblyName>VaultSandbox.Client</AssemblyName>
     <PackageId>VaultSandbox.Client</PackageId>
-    <Version>0.7.0</Version>
+    <Version>0.8.0</Version>
     <Description>Official .NET client for VaultSandbox email testing API with quantum-safe encryption</Description>
     <PackageTags>email;testing;smtp;ci-cd;quantum-safe;vaultsandbox</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

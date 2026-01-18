@@ -160,6 +160,119 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
 
     #endregion
 
+    #region Inbox Webhooks
+
+    public async Task<WebhookResponse> CreateInboxWebhookAsync(string emailAddress, CreateWebhookRequest request, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+
+        try
+        {
+            return await SendAsync<WebhookResponse, CreateWebhookRequest>(
+                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks", request, ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new InboxNotFoundException(emailAddress);
+        }
+    }
+
+    public async Task<WebhookListResponse> ListInboxWebhooksAsync(string emailAddress, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+
+        try
+        {
+            return await SendAsync<WebhookListResponse>(
+                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/webhooks", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new InboxNotFoundException(emailAddress);
+        }
+    }
+
+    public async Task<WebhookResponse> GetInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+        var encodedWebhookId = Uri.EscapeDataString(webhookId);
+
+        try
+        {
+            return await SendAsync<WebhookResponse>(
+                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new WebhookNotFoundException(webhookId);
+        }
+    }
+
+    public async Task<WebhookResponse> UpdateInboxWebhookAsync(string emailAddress, string webhookId, UpdateWebhookRequest request, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+        var encodedWebhookId = Uri.EscapeDataString(webhookId);
+
+        try
+        {
+            return await SendAsync<WebhookResponse, UpdateWebhookRequest>(
+                HttpMethod.Patch, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", request, ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new WebhookNotFoundException(webhookId);
+        }
+    }
+
+    public async Task DeleteInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+        var encodedWebhookId = Uri.EscapeDataString(webhookId);
+
+        try
+        {
+            await SendAsync(HttpMethod.Delete, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new WebhookNotFoundException(webhookId);
+        }
+    }
+
+    public async Task<TestWebhookResponse> TestInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+        var encodedWebhookId = Uri.EscapeDataString(webhookId);
+
+        try
+        {
+            return await SendAsync<TestWebhookResponse>(
+                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}/test", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new WebhookNotFoundException(webhookId);
+        }
+    }
+
+    public async Task<RotateSecretResponse> RotateInboxWebhookSecretAsync(string emailAddress, string webhookId, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+        var encodedWebhookId = Uri.EscapeDataString(webhookId);
+
+        try
+        {
+            return await SendAsync<RotateSecretResponse>(
+                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}/rotate-secret", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new WebhookNotFoundException(webhookId);
+        }
+    }
+
+    #endregion
+
     #region SSE
 
     public async Task<Stream> GetEventsStreamAsync(IEnumerable<string> inboxHashes, CancellationToken ct = default)

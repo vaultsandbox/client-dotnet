@@ -642,6 +642,67 @@ internal sealed class Inbox : IInbox
         };
     }
 
+    #region Webhook Operations
+
+    public async Task<Webhook> CreateWebhookAsync(CreateWebhookOptions options, CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var request = options.ToRequest();
+        var response = await _apiClient.CreateInboxWebhookAsync(EmailAddress, request, ct);
+        return new Webhook(response, this);
+    }
+
+    public async Task<IReadOnlyList<Webhook>> ListWebhooksAsync(CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var response = await _apiClient.ListInboxWebhooksAsync(EmailAddress, ct);
+        return response.Webhooks.Select(w => new Webhook(w, this)).ToList();
+    }
+
+    public async Task<Webhook> GetWebhookAsync(string webhookId, CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var response = await _apiClient.GetInboxWebhookAsync(EmailAddress, webhookId, ct);
+        return new Webhook(response, this);
+    }
+
+    public async Task<Webhook> UpdateWebhookAsync(string webhookId, UpdateWebhookOptions options, CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var request = options.ToRequest();
+        var response = await _apiClient.UpdateInboxWebhookAsync(EmailAddress, webhookId, request, ct);
+        return new Webhook(response, this);
+    }
+
+    public async Task DeleteWebhookAsync(string webhookId, CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        await _apiClient.DeleteInboxWebhookAsync(EmailAddress, webhookId, ct);
+    }
+
+    public async Task<WebhookTestResult> TestWebhookAsync(string webhookId, CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var response = await _apiClient.TestInboxWebhookAsync(EmailAddress, webhookId, ct);
+        return new WebhookTestResult(response);
+    }
+
+    public async Task<WebhookSecretRotation> RotateWebhookSecretAsync(string webhookId, CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var response = await _apiClient.RotateInboxWebhookSecretAsync(EmailAddress, webhookId, ct);
+        return new WebhookSecretRotation(response);
+    }
+
+    #endregion
+
     private void ThrowIfDisposed()
     {
         if (IsDisposed)

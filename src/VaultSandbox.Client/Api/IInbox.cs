@@ -111,4 +111,62 @@ public interface IInbox : IAsyncDisposable
         int count,
         WaitForEmailCountOptions? options = null,
         CancellationToken ct = default);
+
+    // --- Webhook Operations ---
+
+    /// <summary>
+    /// Creates a webhook for this inbox.
+    /// </summary>
+    /// <param name="options">Webhook configuration options.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The created webhook with its signing secret.</returns>
+    Task<Webhook> CreateWebhookAsync(CreateWebhookOptions options, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lists all webhooks for this inbox.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>List of webhooks (secrets are not included in list responses).</returns>
+    Task<IReadOnlyList<Webhook>> ListWebhooksAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets a specific webhook by ID.
+    /// </summary>
+    /// <param name="webhookId">The webhook ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The webhook with its signing secret and delivery statistics.</returns>
+    Task<Webhook> GetWebhookAsync(string webhookId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates a webhook.
+    /// </summary>
+    /// <param name="webhookId">The webhook ID.</param>
+    /// <param name="options">Update options.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated webhook.</returns>
+    Task<Webhook> UpdateWebhookAsync(string webhookId, UpdateWebhookOptions options, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes a webhook.
+    /// </summary>
+    /// <param name="webhookId">The webhook ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task DeleteWebhookAsync(string webhookId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tests a webhook by sending a test event.
+    /// </summary>
+    /// <param name="webhookId">The webhook ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Test result including response from the endpoint.</returns>
+    Task<WebhookTestResult> TestWebhookAsync(string webhookId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Rotates the signing secret for a webhook.
+    /// The old secret remains valid for 1 hour.
+    /// </summary>
+    /// <param name="webhookId">The webhook ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The new secret and grace period information.</returns>
+    Task<WebhookSecretRotation> RotateWebhookSecretAsync(string webhookId, CancellationToken ct = default);
 }

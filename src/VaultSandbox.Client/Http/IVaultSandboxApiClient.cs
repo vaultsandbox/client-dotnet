@@ -69,4 +69,41 @@ internal interface IVaultSandboxApiClient : IDisposable
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The HTTP response stream for SSE parsing.</returns>
     Task<Stream> GetEventsStreamAsync(IEnumerable<string> inboxHashes, CancellationToken ct = default);
+
+    // --- Inbox Webhooks ---
+
+    /// <summary>
+    /// Creates a webhook for a specific inbox.
+    /// </summary>
+    Task<WebhookResponse> CreateInboxWebhookAsync(string emailAddress, CreateWebhookRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lists all webhooks for a specific inbox.
+    /// </summary>
+    Task<WebhookListResponse> ListInboxWebhooksAsync(string emailAddress, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets a specific webhook by ID for an inbox.
+    /// </summary>
+    Task<WebhookResponse> GetInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates a webhook for a specific inbox.
+    /// </summary>
+    Task<WebhookResponse> UpdateInboxWebhookAsync(string emailAddress, string webhookId, UpdateWebhookRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes a webhook for a specific inbox.
+    /// </summary>
+    Task DeleteInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tests a webhook by sending a test event.
+    /// </summary>
+    Task<TestWebhookResponse> TestInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Rotates the signing secret for a webhook.
+    /// </summary>
+    Task<RotateSecretResponse> RotateInboxWebhookSecretAsync(string emailAddress, string webhookId, CancellationToken ct = default);
 }
