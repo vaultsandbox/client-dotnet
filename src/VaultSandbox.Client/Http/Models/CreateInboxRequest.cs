@@ -40,4 +40,11 @@ public sealed record CreateInboxRequest
     [JsonPropertyName("encryption")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Encryption { get; init; }
+
+    /// <summary>
+    /// Spam analysis preference for this inbox. If omitted, the server default is used.
+    /// </summary>
+    [JsonPropertyName("spamAnalysis")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SpamAnalysis { get; init; }
 }

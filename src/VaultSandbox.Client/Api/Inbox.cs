@@ -622,7 +622,8 @@ internal sealed class Inbox : IInbox
             Attachments = attachments,
             Links = parsed?.Links,
             AuthResults = authResults,
-            Metadata = parsed?.Metadata
+            Metadata = parsed?.Metadata,
+            SpamAnalysis = parsed?.SpamAnalysis
         };
     }
 

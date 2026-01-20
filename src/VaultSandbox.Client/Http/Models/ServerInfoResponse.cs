@@ -36,6 +36,12 @@ public sealed record ServerInfoResponse
     /// </summary>
     [JsonPropertyName("encryptionPolicy")]
     public EncryptionPolicy EncryptionPolicy { get; init; } = EncryptionPolicy.Always;
+
+    /// <summary>
+    /// Whether spam analysis (Rspamd) is enabled on this server.
+    /// </summary>
+    [JsonPropertyName("spamAnalysisEnabled")]
+    public bool SpamAnalysisEnabled { get; init; }
 }
 
 /// <summary>

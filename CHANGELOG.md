@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.5] - 2026-01-19
+
+### Added
+
+- Spam analysis support (Rspamd integration)
+- Inbox creation option to enable/disable spam analysis
+- Server capability detection for spam analysis
+
 ## [0.8.0] - 2026-01-16
 
 ### Added

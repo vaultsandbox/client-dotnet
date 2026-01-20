@@ -32,6 +32,9 @@ public sealed record DecryptedParsed
 
     [JsonPropertyName("authResults")]
     public AuthenticationResults? AuthResults { get; init; }
+
+    [JsonPropertyName("spamAnalysis")]
+    public SpamAnalysisResult? SpamAnalysis { get; init; }
 }
 
 /// <summary>

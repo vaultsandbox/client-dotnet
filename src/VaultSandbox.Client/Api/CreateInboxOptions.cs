@@ -32,6 +32,12 @@ public sealed class CreateInboxOptions
     /// Only applicable when the server policy allows overrides ('enabled' or 'disabled').
     /// </summary>
     public InboxEncryption? Encryption { get; set; }
+
+    /// <summary>
+    /// Spam analysis preference for this inbox.
+    /// If not specified, the server default is used.
+    /// </summary>
+    public bool? SpamAnalysis { get; set; }
 }
 
 /// <summary>

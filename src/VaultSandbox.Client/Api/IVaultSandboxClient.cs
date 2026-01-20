@@ -109,6 +109,11 @@ public sealed record ServerInfo
     public required EncryptionPolicy EncryptionPolicy { get; init; }
 
     /// <summary>
+    /// Whether spam analysis (Rspamd) is enabled on this server.
+    /// </summary>
+    public bool SpamAnalysisEnabled { get; init; }
+
+    /// <summary>
     /// Whether per-inbox encryption override is allowed (policy is 'enabled' or 'disabled').
     /// </summary>
     public bool CanOverrideEncryption => EncryptionPolicy is EncryptionPolicy.Enabled or EncryptionPolicy.Disabled;

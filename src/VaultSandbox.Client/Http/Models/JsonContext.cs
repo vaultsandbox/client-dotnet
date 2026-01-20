@@ -36,6 +36,12 @@ namespace VaultSandbox.Client.Http.Models;
 [JsonSerializable(typeof(Api.DkimResult[]))]
 [JsonSerializable(typeof(Api.DmarcResult))]
 [JsonSerializable(typeof(Api.ReverseDnsResult))]
+// Spam analysis types from Api namespace
+[JsonSerializable(typeof(Api.SpamAnalysisResult))]
+[JsonSerializable(typeof(Api.SpamSymbol))]
+[JsonSerializable(typeof(Api.SpamSymbol[]))]
+[JsonSerializable(typeof(Api.SpamAnalysisStatus))]
+[JsonSerializable(typeof(Api.SpamAction))]
 // Public types for file export/import
 [JsonSerializable(typeof(InboxExport))]
 [JsonSerializable(typeof(InboxSyncStatus))]

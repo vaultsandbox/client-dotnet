@@ -78,6 +78,38 @@ public sealed class Email
     public IReadOnlyDictionary<string, object>? Metadata { get; init; }
 
     /// <summary>
+    /// Spam analysis results from Rspamd.
+    /// Null if spam analysis is not enabled on the server.
+    /// </summary>
+    public SpamAnalysisResult? SpamAnalysis { get; init; }
+
+    /// <summary>
+    /// Returns whether this email is classified as spam.
+    /// Returns null if spam analysis was not performed or status is not 'analyzed'.
+    /// </summary>
+    public bool? GetIsSpam()
+    {
+        if (SpamAnalysis is null || SpamAnalysis.Status != SpamAnalysisStatus.Analyzed)
+        {
+            return null;
+        }
+        return SpamAnalysis.IsSpam;
+    }
+
+    /// <summary>
+    /// Returns the spam score for this email.
+    /// Returns null if spam analysis was not performed or status is not 'analyzed'.
+    /// </summary>
+    public double? GetSpamScore()
+    {
+        if (SpamAnalysis is null || SpamAnalysis.Status != SpamAnalysisStatus.Analyzed)
+        {
+            return null;
+        }
+        return SpamAnalysis.Score;
+    }
+
+    /// <summary>
     /// Creates a new email instance.
     /// </summary>
     public Email()
