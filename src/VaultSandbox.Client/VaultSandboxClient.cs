@@ -109,7 +109,8 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 EmailAddress = options?.EmailAddress,
                 EmailAuth = options?.EmailAuth,
                 Encryption = encryptionParam,
-                SpamAnalysis = options?.SpamAnalysis
+                SpamAnalysis = options?.SpamAnalysis,
+                Chaos = options?.Chaos?.ToRequest()
             };
 
             var response = await _apiClient.CreateInboxAsync(request, ct);
@@ -393,7 +394,8 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 SseConsole = response.SseConsole,
                 AllowedDomains = response.AllowedDomains,
                 EncryptionPolicy = response.EncryptionPolicy,
-                SpamAnalysisEnabled = response.SpamAnalysisEnabled
+                SpamAnalysisEnabled = response.SpamAnalysisEnabled,
+                ChaosEnabled = response.ChaosEnabled
             };
         }
         catch (Exception ex)

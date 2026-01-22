@@ -704,6 +704,34 @@ internal sealed class Inbox : IInbox
 
     #endregion
 
+    #region Chaos Configuration
+
+    public async Task<ChaosConfig> GetChaosConfigAsync(CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var response = await _apiClient.GetInboxChaosConfigAsync(EmailAddress, ct);
+        return new ChaosConfig(response);
+    }
+
+    public async Task<ChaosConfig> SetChaosConfigAsync(SetChaosConfigOptions options, CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        var request = options.ToRequest();
+        var response = await _apiClient.SetInboxChaosConfigAsync(EmailAddress, request, ct);
+        return new ChaosConfig(response);
+    }
+
+    public async Task DisableChaosAsync(CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        await _apiClient.DeleteInboxChaosConfigAsync(EmailAddress, ct);
+    }
+
+    #endregion
+
     private void ThrowIfDisposed()
     {
         if (IsDisposed)

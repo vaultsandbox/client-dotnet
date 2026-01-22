@@ -106,4 +106,21 @@ internal interface IVaultSandboxApiClient : IDisposable
     /// Rotates the signing secret for a webhook.
     /// </summary>
     Task<RotateSecretResponse> RotateInboxWebhookSecretAsync(string emailAddress, string webhookId, CancellationToken ct = default);
+
+    // --- Inbox Chaos Configuration ---
+
+    /// <summary>
+    /// Gets the chaos configuration for a specific inbox.
+    /// </summary>
+    Task<ChaosConfigResponse> GetInboxChaosConfigAsync(string emailAddress, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets the chaos configuration for a specific inbox.
+    /// </summary>
+    Task<ChaosConfigResponse> SetInboxChaosConfigAsync(string emailAddress, ChaosConfigRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Disables all chaos for a specific inbox.
+    /// </summary>
+    Task DeleteInboxChaosConfigAsync(string emailAddress, CancellationToken ct = default);
 }

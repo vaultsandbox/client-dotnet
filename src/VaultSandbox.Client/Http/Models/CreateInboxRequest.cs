@@ -47,4 +47,12 @@ public sealed record CreateInboxRequest
     [JsonPropertyName("spamAnalysis")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? SpamAnalysis { get; init; }
+
+    /// <summary>
+    /// Optional chaos configuration to enable chaos engineering for this inbox.
+    /// Requires chaos to be enabled globally on the server.
+    /// </summary>
+    [JsonPropertyName("chaos")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ChaosConfigRequest? Chaos { get; init; }
 }

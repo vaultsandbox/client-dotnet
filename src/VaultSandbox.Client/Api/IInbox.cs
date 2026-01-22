@@ -169,4 +169,36 @@ public interface IInbox : IAsyncDisposable
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The new secret and grace period information.</returns>
     Task<WebhookSecretRotation> RotateWebhookSecretAsync(string webhookId, CancellationToken ct = default);
+
+    // --- Chaos Configuration Operations ---
+
+    /// <summary>
+    /// Gets the chaos configuration for this inbox.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The current chaos configuration.</returns>
+    /// <exception cref="VaultSandbox.Client.Exceptions.ApiException">
+    /// Thrown with status code 403 if chaos is disabled globally on the server.
+    /// </exception>
+    Task<ChaosConfig> GetChaosConfigAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets the chaos configuration for this inbox.
+    /// </summary>
+    /// <param name="options">The chaos configuration options.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated chaos configuration.</returns>
+    /// <exception cref="VaultSandbox.Client.Exceptions.ApiException">
+    /// Thrown with status code 403 if chaos is disabled globally on the server.
+    /// </exception>
+    Task<ChaosConfig> SetChaosConfigAsync(SetChaosConfigOptions options, CancellationToken ct = default);
+
+    /// <summary>
+    /// Disables all chaos for this inbox.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <exception cref="VaultSandbox.Client.Exceptions.ApiException">
+    /// Thrown with status code 403 if chaos is disabled globally on the server.
+    /// </exception>
+    Task DisableChaosAsync(CancellationToken ct = default);
 }

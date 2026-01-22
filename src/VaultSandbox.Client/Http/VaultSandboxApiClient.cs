@@ -273,6 +273,54 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
 
     #endregion
 
+    #region Inbox Chaos Configuration
+
+    public async Task<ChaosConfigResponse> GetInboxChaosConfigAsync(string emailAddress, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+
+        try
+        {
+            return await SendAsync<ChaosConfigResponse>(
+                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/chaos", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new InboxNotFoundException(emailAddress);
+        }
+    }
+
+    public async Task<ChaosConfigResponse> SetInboxChaosConfigAsync(string emailAddress, ChaosConfigRequest request, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+
+        try
+        {
+            return await SendAsync<ChaosConfigResponse, ChaosConfigRequest>(
+                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/chaos", request, ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new InboxNotFoundException(emailAddress);
+        }
+    }
+
+    public async Task DeleteInboxChaosConfigAsync(string emailAddress, CancellationToken ct = default)
+    {
+        var encodedEmail = Uri.EscapeDataString(emailAddress);
+
+        try
+        {
+            await SendAsync(HttpMethod.Delete, $"/api/inboxes/{encodedEmail}/chaos", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new InboxNotFoundException(emailAddress);
+        }
+    }
+
+    #endregion
+
     #region SSE
 
     public async Task<Stream> GetEventsStreamAsync(IEnumerable<string> inboxHashes, CancellationToken ct = default)

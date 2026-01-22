@@ -114,6 +114,11 @@ public sealed record ServerInfo
     public bool SpamAnalysisEnabled { get; init; }
 
     /// <summary>
+    /// Whether chaos engineering features are enabled on this server.
+    /// </summary>
+    public bool ChaosEnabled { get; init; }
+
+    /// <summary>
     /// Whether per-inbox encryption override is allowed (policy is 'enabled' or 'disabled').
     /// </summary>
     public bool CanOverrideEncryption => EncryptionPolicy is EncryptionPolicy.Enabled or EncryptionPolicy.Disabled;

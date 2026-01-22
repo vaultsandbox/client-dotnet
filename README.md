@@ -15,7 +15,7 @@
 
 **Production-like email testing. Self-hosted & secure.**
 
-The official .NET SDK for [VaultSandbox Gateway](https://github.com/vaultsandbox/gateway) — a secure, receive-only SMTP server for QA/testing environments. This SDK abstracts quantum-safe encryption complexity, making email testing workflows transparent and effortless.
+The official .NET SDK for [VaultSandbox Gateway](https://github.com/vaultsandbox/gateway) — a secure, receive-only SMTP server for QA/testing environments. This SDK abstracts encryption complexity, making email testing workflows transparent and effortless.
 
 Stop mocking your email stack. If your app sends real emails in production, it must send real emails in testing. VaultSandbox provides isolated inboxes that behave exactly like production without exposing a single byte of customer data.
 
@@ -40,6 +40,9 @@ Stop mocking your email stack. If your app sends real emails in production, it m
 - **Full Email Access** — Decrypt and access email content, headers, links, and attachments
 - **Email Authentication** — Built-in SPF/DKIM/DMARC validation helpers
 - **Type-Safe** — Full C# type support with comprehensive interfaces and records
+- **[Spam Analysis](https://vaultsandbox.dev/client-dotnet/concepts/spam-analysis/)** — Rspamd integration for spam scores, classifications, and rule analysis
+- **[Webhooks](https://vaultsandbox.dev/client-dotnet/guides/webhooks/)** — Global and per-inbox HTTP callbacks for email events with filtering and templates
+- **[Chaos Engineering](https://vaultsandbox.dev/client-dotnet/guides/chaos/)** — Per-inbox SMTP failure simulation (latency, drops, errors, greylisting, blackhole)
 
 ## Installation
 

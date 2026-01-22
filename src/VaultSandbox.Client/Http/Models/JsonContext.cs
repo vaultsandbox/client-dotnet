@@ -70,6 +70,22 @@ namespace VaultSandbox.Client.Http.Models;
 [JsonSerializable(typeof(Api.FilterMode))]
 [JsonSerializable(typeof(Api.WebhookScope))]
 [JsonSerializable(typeof(Api.WebhookDeliveryStatus))]
+// Chaos types
+[JsonSerializable(typeof(ChaosConfigRequest))]
+[JsonSerializable(typeof(ChaosConfigResponse))]
+[JsonSerializable(typeof(LatencyConfigRequest))]
+[JsonSerializable(typeof(LatencyConfigResponse))]
+[JsonSerializable(typeof(ConnectionDropConfigRequest))]
+[JsonSerializable(typeof(ConnectionDropConfigResponse))]
+[JsonSerializable(typeof(RandomErrorConfigRequest))]
+[JsonSerializable(typeof(RandomErrorConfigResponse))]
+[JsonSerializable(typeof(GreylistConfigRequest))]
+[JsonSerializable(typeof(GreylistConfigResponse))]
+[JsonSerializable(typeof(BlackholeConfigRequest))]
+[JsonSerializable(typeof(BlackholeConfigResponse))]
+[JsonSerializable(typeof(Api.GreylistTrackBy))]
+[JsonSerializable(typeof(Api.RandomErrorType))]
+[JsonSerializable(typeof(Api.RandomErrorType[]))]
 [ExcludeFromCodeCoverage]
 internal partial class VaultSandboxJsonContext : JsonSerializerContext
 {

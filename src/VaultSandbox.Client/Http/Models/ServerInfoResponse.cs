@@ -42,6 +42,12 @@ public sealed record ServerInfoResponse
     /// </summary>
     [JsonPropertyName("spamAnalysisEnabled")]
     public bool SpamAnalysisEnabled { get; init; }
+
+    /// <summary>
+    /// Whether chaos engineering features are enabled on this server.
+    /// </summary>
+    [JsonPropertyName("chaosEnabled")]
+    public bool ChaosEnabled { get; init; }
 }
 
 /// <summary>

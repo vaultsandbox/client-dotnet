@@ -38,6 +38,12 @@ public sealed class CreateInboxOptions
     /// If not specified, the server default is used.
     /// </summary>
     public bool? SpamAnalysis { get; set; }
+
+    /// <summary>
+    /// Optional chaos configuration to enable chaos engineering for this inbox.
+    /// Requires chaos to be enabled globally on the server.
+    /// </summary>
+    public SetChaosConfigOptions? Chaos { get; set; }
 }
 
 /// <summary>
