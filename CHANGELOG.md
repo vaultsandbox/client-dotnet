@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.1] - 2026-01-28
+
+### Added
+
+- Webhook and chaos engineering examples in README and integration tests
+
+### Fixed
+
+- Resource leak in PollingDeliveryStrategy
+- Resource leak in SSE stream (HttpResponseMessage not disposed)
+- ReDoS vulnerability in WaitForEmailOptions regex pattern
+- Invalid regex patterns now throw descriptive ArgumentException
+- Null guards for decryption operations
+- 404 exception handling in ApiClient
+
+### Changed
+
+- Extracted channel creation helper in Inbox for better maintainability
+- Added `volatile` modifier for thread safety in Inbox and SseDeliveryStrategy
+- Improved CancellationToken propagation throughout Inbox operations
+
 ## [0.9.0] - 2026-01-22
 
 ### Added

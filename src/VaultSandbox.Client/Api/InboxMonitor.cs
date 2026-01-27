@@ -12,7 +12,7 @@ public sealed class InboxMonitor : IAsyncDisposable
     private readonly Channel<InboxEmailEvent> _channel;
     private readonly List<Task> _watchTasks = new();
     private readonly CancellationTokenSource _cts = new();
-    private bool _isStarted;
+    private volatile bool _isStarted;
     private bool _isDisposed;
 
     internal InboxMonitor(IReadOnlyList<IInbox> inboxes)

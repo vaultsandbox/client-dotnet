@@ -13,36 +13,16 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![.NET](https://img.shields.io/badge/.NET-%3E%3D9.0-512BD4.svg)](https://dotnet.microsoft.com/)
 
-**Production-like email testing. Self-hosted & secure.**
+**Production-like email testing. Self-hosted and secure.**
 
-The official .NET SDK for [VaultSandbox Gateway](https://github.com/vaultsandbox/gateway) — a secure, receive-only SMTP server for QA/testing environments. This SDK abstracts encryption complexity, making email testing workflows transparent and effortless.
+The official .NET SDK for [VaultSandbox Gateway](https://github.com/vaultsandbox/gateway) — a self-hosted SMTP testing platform that replicates real-world email delivery with TLS, authentication, spam analysis, chaos engineering, and zero-knowledge encryption.
 
-Stop mocking your email stack. If your app sends real emails in production, it must send real emails in testing. VaultSandbox provides isolated inboxes that behave exactly like production without exposing a single byte of customer data.
+Stop mocking. Test email like production.
+
+**[See full feature list →](https://github.com/vaultsandbox/gateway)**
+
 
 > **.NET 9+** required. Not intended for Blazor WebAssembly or browser runtimes.
-
-## Why VaultSandbox?
-
-| Feature             | Simple Mocks     | Public SaaS  | **VaultSandbox**    |
-| :------------------ | :--------------- | :----------- | :------------------ |
-| **TLS/SSL**         | Ignored/Disabled | Partial      | **Real ACME certs** |
-| **Data Privacy**    | Local only       | Shared cloud | **Private VPC**     |
-| **Inbound Mail**    | Outbound only    | Yes          | **Real MX**         |
-| **Auth (SPF/DKIM)** | None             | Limited      | **Full Validation** |
-| **Crypto**          | Plaintext        | Varies       | **Zero-Knowledge**  |
-
-## Features
-
-- **Quantum-Safe Encryption** — Automatic ML-KEM-768 (Kyber768) key encapsulation + AES-256-GCM encryption
-- **Zero Crypto Knowledge Required** — All cryptographic operations are invisible to the user
-- **Real-Time Email Delivery** — SSE-based delivery for instant updates
-- **Built for CI/CD** — Deterministic tests without sleeps, polling, or flakiness
-- **Full Email Access** — Decrypt and access email content, headers, links, and attachments
-- **Email Authentication** — Built-in SPF/DKIM/DMARC validation helpers
-- **Type-Safe** — Full C# type support with comprehensive interfaces and records
-- **[Spam Analysis](https://vaultsandbox.dev/client-dotnet/concepts/spam-analysis/)** — Rspamd integration for spam scores, classifications, and rule analysis
-- **[Webhooks](https://vaultsandbox.dev/client-dotnet/guides/webhooks/)** — Global and per-inbox HTTP callbacks for email events with filtering and templates
-- **[Chaos Engineering](https://vaultsandbox.dev/client-dotnet/guides/chaos/)** — Per-inbox SMTP failure simulation (latency, drops, errors, greylisting, blackhole)
 
 ## Installation
 
@@ -401,6 +381,65 @@ await foreach (var evt in monitor.WatchAsync())
     Console.WriteLine($"New email in {evt.InboxAddress}: {evt.Email.Subject}");
     // Further processing...
 }
+```
+
+### Webhooks
+
+Register a webhook to receive notifications when emails arrive:
+
+```csharp
+var inbox = await client.CreateInboxAsync();
+
+// Create a webhook for email.received events
+var webhook = await inbox.CreateWebhookAsync(new CreateWebhookOptions
+{
+    Url = "https://your-server.com/webhook",
+    Events = [WebhookEventType.EmailReceived],
+    Description = "Notify on new emails"
+});
+
+Console.WriteLine($"Webhook ID: {webhook.Id}");
+Console.WriteLine($"Signing secret: {webhook.Secret}");
+
+// Test the webhook
+var testResult = await webhook.TestAsync();
+Console.WriteLine($"Test successful: {testResult.Success}");
+
+// List all webhooks
+var webhooks = await inbox.ListWebhooksAsync();
+Console.WriteLine($"Total webhooks: {webhooks.Count}");
+
+// Clean up
+await webhook.DeleteAsync();
+```
+
+### Chaos Engineering
+
+Test how your application handles email delivery failures:
+
+```csharp
+var inbox = await client.CreateInboxAsync();
+
+// Enable latency injection (adds 1-5 second delays)
+await inbox.SetChaosConfigAsync(new SetChaosConfigOptions
+{
+    Enabled = true,
+    Latency = new LatencyOptions
+    {
+        Enabled = true,
+        MinDelayMs = 1000,
+        MaxDelayMs = 5000,
+        Probability = 1.0  // Apply to all emails
+    }
+});
+
+// Verify chaos is configured
+var config = await inbox.GetChaosConfigAsync();
+Console.WriteLine($"Chaos enabled: {config.Enabled}");
+Console.WriteLine($"Latency enabled: {config.Latency?.Enabled}");
+
+// Disable chaos when done
+await inbox.DisableChaosAsync();
 ```
 
 ### Dependency Injection

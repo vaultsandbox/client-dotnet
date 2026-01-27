@@ -545,6 +545,98 @@ public class ReadmeExamplesTests : IntegrationTestBase
         }
     }
 
+    [SkippableFact]
+    public async Task Webhooks_Example()
+    {
+        SkipIfNotConfigured();
+
+        // README: Webhooks
+        var inbox = await Client.CreateInboxAsync();
+        await using (inbox)
+        {
+            // Create a webhook for email.received events
+            var webhook = await inbox.CreateWebhookAsync(new CreateWebhookOptions
+            {
+                Url = "https://httpbin.org/post",
+                Events = [WebhookEventType.EmailReceived],
+                Description = "Test webhook for README example"
+            });
+
+            webhook.Id.Should().StartWith("whk_");
+            webhook.Secret.Should().StartWith("whsec_");
+            webhook.Events.Should().Contain(WebhookEventType.EmailReceived);
+            webhook.Description.Should().Be("Test webhook for README example");
+
+            // Test the webhook
+            var testResult = await webhook.TestAsync();
+            // httpbin.org should respond successfully
+            testResult.Success.Should().BeTrue();
+            testResult.StatusCode.Should().Be(200);
+
+            // List all webhooks
+            var webhooks = await inbox.ListWebhooksAsync();
+            webhooks.Count.Should().BeGreaterThanOrEqualTo(1);
+            webhooks.Should().Contain(w => w.Id == webhook.Id);
+
+            // Clean up
+            await webhook.DeleteAsync();
+
+            // Verify deletion
+            var remainingWebhooks = await inbox.ListWebhooksAsync();
+            remainingWebhooks.Should().NotContain(w => w.Id == webhook.Id);
+        }
+    }
+
+    [SkippableFact]
+    public async Task ChaosEngineering_Example()
+    {
+        SkipIfNotConfigured();
+
+        // README: Chaos Engineering
+        var inbox = await Client.CreateInboxAsync();
+        await using (inbox)
+        {
+            try
+            {
+                // Enable latency injection
+                var chaosConfig = await inbox.SetChaosConfigAsync(new SetChaosConfigOptions
+                {
+                    Enabled = true,
+                    Latency = new LatencyOptions
+                    {
+                        Enabled = true,
+                        MinDelayMs = 100,
+                        MaxDelayMs = 500,
+                        Probability = 1.0
+                    }
+                });
+
+                chaosConfig.Enabled.Should().BeTrue();
+                chaosConfig.Latency.Should().NotBeNull();
+                chaosConfig.Latency!.Enabled.Should().BeTrue();
+                chaosConfig.Latency.MinDelayMs.Should().Be(100);
+                chaosConfig.Latency.MaxDelayMs.Should().Be(500);
+
+                // Verify chaos is configured
+                var fetchedConfig = await inbox.GetChaosConfigAsync();
+                fetchedConfig.Enabled.Should().BeTrue();
+                fetchedConfig.Latency?.Enabled.Should().BeTrue();
+
+                // Disable chaos when done
+                await inbox.DisableChaosAsync();
+
+                // Verify chaos is disabled
+                var disabledConfig = await inbox.GetChaosConfigAsync();
+                disabledConfig.Enabled.Should().BeFalse();
+            }
+            catch (ApiException ex) when (ex.StatusCode == 403)
+            {
+                // Chaos may be disabled globally on the server - skip this test
+                Skip.If(true, "Chaos engineering is disabled on this server");
+            }
+        }
+    }
+
     #region Authentication Results Explicit Assertions
 
     [SkippableFact]

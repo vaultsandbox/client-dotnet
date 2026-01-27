@@ -70,15 +70,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
     {
         var encodedEmail = Uri.EscapeDataString(emailAddress);
 
-        try
-        {
-            return await SendAsync<InboxSyncResponse>(
-                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/sync", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new InboxNotFoundException(emailAddress);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<InboxSyncResponse>(HttpMethod.Get, $"/api/inboxes/{encodedEmail}/sync", ct),
+            () => new InboxNotFoundException(emailAddress));
     }
 
     #endregion
@@ -94,14 +88,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
             url += "?includeContent=true";
         }
 
-        try
-        {
-            return await SendAsync<EmailResponse[]>(HttpMethod.Get, url, ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new InboxNotFoundException(emailAddress);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<EmailResponse[]>(HttpMethod.Get, url, ct),
+            () => new InboxNotFoundException(emailAddress));
     }
 
     public async Task<EmailResponse> GetEmailAsync(string emailAddress, string emailId, CancellationToken ct = default)
@@ -109,15 +98,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedId = Uri.EscapeDataString(emailId);
 
-        try
-        {
-            return await SendAsync<EmailResponse>(
-                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/emails/{encodedId}", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new EmailNotFoundException(emailId);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<EmailResponse>(HttpMethod.Get, $"/api/inboxes/{encodedEmail}/emails/{encodedId}", ct),
+            () => new EmailNotFoundException(emailId));
     }
 
     public async Task<RawEmailResponse> GetRawEmailAsync(string emailAddress, string emailId, CancellationToken ct = default)
@@ -125,15 +108,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedId = Uri.EscapeDataString(emailId);
 
-        try
-        {
-            return await SendAsync<RawEmailResponse>(
-                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/emails/{encodedId}/raw", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new EmailNotFoundException(emailId);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<RawEmailResponse>(HttpMethod.Get, $"/api/inboxes/{encodedEmail}/emails/{encodedId}/raw", ct),
+            () => new EmailNotFoundException(emailId));
     }
 
     public async Task MarkEmailAsReadAsync(string emailAddress, string emailId, CancellationToken ct = default)
@@ -141,14 +118,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedId = Uri.EscapeDataString(emailId);
 
-        try
-        {
-            await SendAsync(HttpMethod.Patch, $"/api/inboxes/{encodedEmail}/emails/{encodedId}/read", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new EmailNotFoundException(emailId);
-        }
+        await WithNotFoundHandling(
+            () => SendAsync(HttpMethod.Patch, $"/api/inboxes/{encodedEmail}/emails/{encodedId}/read", ct),
+            () => new EmailNotFoundException(emailId));
     }
 
     public async Task DeleteEmailAsync(string emailAddress, string emailId, CancellationToken ct = default)
@@ -166,30 +138,18 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
     {
         var encodedEmail = Uri.EscapeDataString(emailAddress);
 
-        try
-        {
-            return await SendAsync<WebhookResponse, CreateWebhookRequest>(
-                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks", request, ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new InboxNotFoundException(emailAddress);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<WebhookResponse, CreateWebhookRequest>(HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks", request, ct),
+            () => new InboxNotFoundException(emailAddress));
     }
 
     public async Task<WebhookListResponse> ListInboxWebhooksAsync(string emailAddress, CancellationToken ct = default)
     {
         var encodedEmail = Uri.EscapeDataString(emailAddress);
 
-        try
-        {
-            return await SendAsync<WebhookListResponse>(
-                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/webhooks", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new InboxNotFoundException(emailAddress);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<WebhookListResponse>(HttpMethod.Get, $"/api/inboxes/{encodedEmail}/webhooks", ct),
+            () => new InboxNotFoundException(emailAddress));
     }
 
     public async Task<WebhookResponse> GetInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default)
@@ -197,15 +157,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedWebhookId = Uri.EscapeDataString(webhookId);
 
-        try
-        {
-            return await SendAsync<WebhookResponse>(
-                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new WebhookNotFoundException(webhookId);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<WebhookResponse>(HttpMethod.Get, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", ct),
+            () => new WebhookNotFoundException(webhookId));
     }
 
     public async Task<WebhookResponse> UpdateInboxWebhookAsync(string emailAddress, string webhookId, UpdateWebhookRequest request, CancellationToken ct = default)
@@ -213,15 +167,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedWebhookId = Uri.EscapeDataString(webhookId);
 
-        try
-        {
-            return await SendAsync<WebhookResponse, UpdateWebhookRequest>(
-                HttpMethod.Patch, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", request, ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new WebhookNotFoundException(webhookId);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<WebhookResponse, UpdateWebhookRequest>(HttpMethod.Patch, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", request, ct),
+            () => new WebhookNotFoundException(webhookId));
     }
 
     public async Task DeleteInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default)
@@ -229,14 +177,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedWebhookId = Uri.EscapeDataString(webhookId);
 
-        try
-        {
-            await SendAsync(HttpMethod.Delete, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new WebhookNotFoundException(webhookId);
-        }
+        await WithNotFoundHandling(
+            () => SendAsync(HttpMethod.Delete, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}", ct),
+            () => new WebhookNotFoundException(webhookId));
     }
 
     public async Task<TestWebhookResponse> TestInboxWebhookAsync(string emailAddress, string webhookId, CancellationToken ct = default)
@@ -244,15 +187,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedWebhookId = Uri.EscapeDataString(webhookId);
 
-        try
-        {
-            return await SendAsync<TestWebhookResponse>(
-                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}/test", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new WebhookNotFoundException(webhookId);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<TestWebhookResponse>(HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}/test", ct),
+            () => new WebhookNotFoundException(webhookId));
     }
 
     public async Task<RotateSecretResponse> RotateInboxWebhookSecretAsync(string emailAddress, string webhookId, CancellationToken ct = default)
@@ -260,15 +197,9 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
         var encodedEmail = Uri.EscapeDataString(emailAddress);
         var encodedWebhookId = Uri.EscapeDataString(webhookId);
 
-        try
-        {
-            return await SendAsync<RotateSecretResponse>(
-                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}/rotate-secret", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new WebhookNotFoundException(webhookId);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<RotateSecretResponse>(HttpMethod.Post, $"/api/inboxes/{encodedEmail}/webhooks/{encodedWebhookId}/rotate-secret", ct),
+            () => new WebhookNotFoundException(webhookId));
     }
 
     #endregion
@@ -279,54 +210,37 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
     {
         var encodedEmail = Uri.EscapeDataString(emailAddress);
 
-        try
-        {
-            return await SendAsync<ChaosConfigResponse>(
-                HttpMethod.Get, $"/api/inboxes/{encodedEmail}/chaos", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new InboxNotFoundException(emailAddress);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<ChaosConfigResponse>(HttpMethod.Get, $"/api/inboxes/{encodedEmail}/chaos", ct),
+            () => new InboxNotFoundException(emailAddress));
     }
 
     public async Task<ChaosConfigResponse> SetInboxChaosConfigAsync(string emailAddress, ChaosConfigRequest request, CancellationToken ct = default)
     {
         var encodedEmail = Uri.EscapeDataString(emailAddress);
 
-        try
-        {
-            return await SendAsync<ChaosConfigResponse, ChaosConfigRequest>(
-                HttpMethod.Post, $"/api/inboxes/{encodedEmail}/chaos", request, ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new InboxNotFoundException(emailAddress);
-        }
+        return await WithNotFoundHandling(
+            () => SendAsync<ChaosConfigResponse, ChaosConfigRequest>(HttpMethod.Post, $"/api/inboxes/{encodedEmail}/chaos", request, ct),
+            () => new InboxNotFoundException(emailAddress));
     }
 
     public async Task DeleteInboxChaosConfigAsync(string emailAddress, CancellationToken ct = default)
     {
         var encodedEmail = Uri.EscapeDataString(emailAddress);
 
-        try
-        {
-            await SendAsync(HttpMethod.Delete, $"/api/inboxes/{encodedEmail}/chaos", ct);
-        }
-        catch (ApiException ex) when (ex.StatusCode == 404)
-        {
-            throw new InboxNotFoundException(emailAddress);
-        }
+        await WithNotFoundHandling(
+            () => SendAsync(HttpMethod.Delete, $"/api/inboxes/{encodedEmail}/chaos", ct),
+            () => new InboxNotFoundException(emailAddress));
     }
 
     #endregion
 
     #region SSE
 
-    public async Task<Stream> GetEventsStreamAsync(IEnumerable<string> inboxHashes, CancellationToken ct = default)
+    public async Task<HttpResponseMessage> GetEventsResponseAsync(IEnumerable<string> inboxHashes, CancellationToken ct = default)
     {
         var hashesParam = string.Join(",", inboxHashes);
-        var request = new HttpRequestMessage(HttpMethod.Get, $"/api/events?inboxes={hashesParam}");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/events?inboxes={hashesParam}");
         request.Headers.Accept.ParseAdd("text/event-stream");
 
         var response = await _httpClient.SendAsync(
@@ -336,12 +250,40 @@ internal sealed class VaultSandboxApiClient : IVaultSandboxApiClient
 
         await EnsureSuccessAsync(response, ct);
 
-        return await response.Content.ReadAsStreamAsync(ct);
+        return response;  // Caller owns and disposes
     }
 
     #endregion
 
     #region Private Helpers
+
+    private async Task<T> WithNotFoundHandling<T>(
+        Func<Task<T>> action,
+        Func<Exception> createException)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw createException();
+        }
+    }
+
+    private async Task WithNotFoundHandling(
+        Func<Task> action,
+        Func<Exception> createException)
+    {
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw createException();
+        }
+    }
 
     private async Task<TResponse> SendAsync<TResponse>(HttpMethod method, string path, CancellationToken ct)
     {

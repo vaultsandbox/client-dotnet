@@ -18,6 +18,7 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
     private readonly ConcurrentDictionary<string, PollingState> _pollingStates = new();
     private readonly ConcurrentDictionary<string, Task> _pollingTasks = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pollingCts = new();
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _linkedCts = new();
 
     private const double BackoffMultiplier = 1.5;
     private const int MaxBackoffMultiplier = 15;
@@ -41,6 +42,7 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
             cts.Token, subscription.CancellationToken);
 
         _pollingCts[subscription.InboxHash] = cts;
+        _linkedCts[subscription.InboxHash] = linkedCts;
         _pollingStates[subscription.InboxHash] = new PollingState();
         _pollingTasks[subscription.InboxHash] = PollInboxAsync(subscription, linkedCts.Token);
 
@@ -53,6 +55,11 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
         {
             await cts.CancelAsync();
             cts.Dispose();
+        }
+
+        if (_linkedCts.TryRemove(subscription.InboxHash, out var linkedCts))
+        {
+            linkedCts.Dispose();
         }
 
         if (_pollingTasks.TryRemove(subscription.InboxHash, out var task))
@@ -169,6 +176,12 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
             cts.Dispose();
         }
 
+        // Dispose linked cancellation token sources
+        foreach (var linkedCts in _linkedCts.Values)
+        {
+            linkedCts.Dispose();
+        }
+
         // Wait for all tasks to complete (ignoring cancellation exceptions)
         try
         {
@@ -180,6 +193,7 @@ internal sealed class PollingDeliveryStrategy : DeliveryStrategyBase
         }
 
         _pollingCts.Clear();
+        _linkedCts.Clear();
         _pollingTasks.Clear();
         _pollingStates.Clear();
         Subscriptions.Clear();

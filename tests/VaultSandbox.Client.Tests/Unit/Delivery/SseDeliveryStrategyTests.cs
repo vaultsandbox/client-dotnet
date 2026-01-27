@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using System.Text;
 using FluentAssertions;
 using Moq;
@@ -70,7 +72,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task SubscribeAsync_WhenConnectionFails_ShouldThrow()
     {
         // Arrange
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Connection failed"));
 
         // Act
@@ -155,15 +157,15 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         var connectionAttempts = 0;
         var failingStream = new FailAfterReadStream(bytesToReadBeforeFail: 0);
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
-                    return failingStream;
+                    return CreateSseResponse(failingStream);
                 }
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -187,17 +189,17 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         var reconnectCallbackInvoked = false;
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
                     // First connection succeeds then stream fails
-                    return new FailAfterReadStream(bytesToReadBeforeFail: 10);
+                    return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 10));
                 }
                 // Subsequent connections succeed with blocking stream
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -253,15 +255,15 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         var callback2Invoked = false;
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
-                    return new FailAfterReadStream(bytesToReadBeforeFail: 10);
+                    return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 10));
                 }
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Subscribe first inbox with throwing callback
@@ -302,11 +304,11 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         await _strategy.SubscribeAsync(
@@ -364,7 +366,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task ConnectionFailure_OnFirstAttempt_ShouldPropagateImmediately()
     {
         // Arrange
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("Server unreachable"));
 
         // Act
@@ -394,14 +396,14 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
 
         var mockApiClient = new Mock<IVaultSandboxApiClient>();
 
-        mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
                     // First connection succeeds
-                    return new FailAfterReadStream(bytesToReadBeforeFail: 5);
+                    return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5));
                 }
                 // Subsequent connections fail
                 throw new IOException("Connection refused");
@@ -429,19 +431,19 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
-                    return new FailAfterReadStream(bytesToReadBeforeFail: 5);
+                    return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5));
                 }
                 if (connectionAttempts < 4)
                 {
                     throw new HttpRequestException("Temporary network error");
                 }
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -463,19 +465,19 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
-                    return new FailAfterReadStream(bytesToReadBeforeFail: 5);
+                    return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5));
                 }
                 if (connectionAttempts == 2)
                 {
                     throw new IOException("Network stream closed");
                 }
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -501,16 +503,16 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
                     // First stream ends gracefully (returns 0 bytes)
-                    return new EndingStream();
+                    return CreateSseResponse(new EndingStream());
                 }
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -532,15 +534,15 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
-                    return new FailAfterReadStream(bytesToReadBeforeFail: 10);
+                    return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 10));
                 }
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -566,7 +568,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         using var cts = new CancellationTokenSource();
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException("Connection cancelled"));
 
         // Act
@@ -588,14 +590,14 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         var connectionAttempts = 0;
         using var cts = new CancellationTokenSource();
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .Returns((IEnumerable<string> _, CancellationToken ct) =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
                     // First connection succeeds then stream fails
-                    return Task.FromResult<Stream>(new FailAfterReadStream(bytesToReadBeforeFail: 5));
+                    return Task.FromResult(CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5)));
                 }
                 // Cancel during reconnection
                 cts.Cancel();
@@ -646,16 +648,16 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionAttempts = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionAttempts++;
                 if (connectionAttempts == 1)
                 {
                     // First stream ends immediately
-                    return new EndingStream();
+                    return CreateSseResponse(new EndingStream());
                 }
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -708,11 +710,11 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionCount = 0;
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 connectionCount++;
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         // Act
@@ -742,11 +744,11 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var requestedInboxes = new List<string[]>();
 
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IEnumerable<string> inboxes, CancellationToken _) =>
             {
                 requestedInboxes.Add(inboxes.ToArray());
-                return new BlockingStream();
+                return CreateSseResponse(new BlockingStream());
             });
 
         await _strategy.SubscribeAsync(
@@ -776,10 +778,20 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
 
     #region Helper Methods and Classes
 
+    private static HttpResponseMessage CreateSseResponse(Stream stream)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(stream)
+        };
+        response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
+        return response;
+    }
+
     private void SetupSseStreamSuccess()
     {
-        _mockApiClient.Setup(x => x.GetEventsStreamAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingStream());
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => CreateSseResponse(new BlockingStream()));
     }
 
     /// <summary>

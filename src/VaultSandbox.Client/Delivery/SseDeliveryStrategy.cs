@@ -20,7 +20,7 @@ internal sealed class SseDeliveryStrategy : DeliveryStrategyBase
     private CancellationTokenSource? _connectionCts;
     private Task? _connectionTask;
     private int _reconnectAttempts;
-    private bool _isConnected;
+    private volatile bool _isConnected;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private TaskCompletionSource<bool>? _initialConnectionTcs;
 
@@ -141,7 +141,8 @@ internal sealed class SseDeliveryStrategy : DeliveryStrategyBase
 
                 _logger?.LogDebug("Connecting to SSE with {Count} inboxes", inboxHashes.Length);
 
-                await using var stream = await _apiClient.GetEventsStreamAsync(inboxHashes, ct);
+                using var response = await _apiClient.GetEventsResponseAsync(inboxHashes, ct);
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
 
                 _isConnected = true;
                 _reconnectAttempts = 0;

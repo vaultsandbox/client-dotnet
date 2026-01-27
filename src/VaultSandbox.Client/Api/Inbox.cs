@@ -26,8 +26,16 @@ internal sealed class Inbox : IInbox
 
     private readonly Channel<Email> _emailChannel;
     private readonly ConcurrentDictionary<string, bool> _localEmailIds = new();
+    private readonly CancellationTokenSource _inboxCts = new();
     private bool _isSubscribed;
     private readonly SemaphoreSlim _subscriptionLock = new(1, 1);
+
+    private static Channel<Email> CreateEmailChannel() =>
+        Channel.CreateUnbounded<Email>(new UnboundedChannelOptions
+        {
+            SingleReader = false,
+            SingleWriter = true
+        });
 
     public string EmailAddress { get; }
     public DateTimeOffset ExpiresAt { get; }
@@ -65,11 +73,7 @@ internal sealed class Inbox : IInbox
         _options = options;
         _logger = logger;
 
-        _emailChannel = Channel.CreateUnbounded<Email>(new UnboundedChannelOptions
-        {
-            SingleReader = false,
-            SingleWriter = true
-        });
+        _emailChannel = CreateEmailChannel();
     }
 
     /// <summary>
@@ -98,11 +102,7 @@ internal sealed class Inbox : IInbox
         _options = options;
         _logger = logger;
 
-        _emailChannel = Channel.CreateUnbounded<Email>(new UnboundedChannelOptions
-        {
-            SingleReader = false,
-            SingleWriter = true
-        });
+        _emailChannel = CreateEmailChannel();
     }
 
     public async Task<IReadOnlyList<Email>> GetEmailsAsync(CancellationToken ct = default)
@@ -164,11 +164,17 @@ internal sealed class Inbox : IInbox
 
         if (response.IsEncrypted)
         {
+            if (_cryptoProvider is null || _keyPair is null || _serverSigPk is null)
+            {
+                throw new InvalidOperationException(
+                    "Cannot decrypt email: inbox was created without encryption support.");
+            }
+
             // Encrypted inbox: decrypt the raw content
             var rawBytes = await _cryptoProvider.DecryptAsync(
                 response.EncryptedRaw!,
-                _keyPair!.SecretKey,
-                _serverSigPk!,
+                _keyPair.SecretKey,
+                _serverSigPk,
                 ct);
 
             // Decrypted content is base64-encoded - decode to get actual raw email
@@ -406,6 +412,8 @@ internal sealed class Inbox : IInbox
     {
         try
         {
+            var ct = _inboxCts.Token;
+
             // Check for duplicate - skip if already processed
             if (!_localEmailIds.TryAdd(emailEvent.EmailId, true))
             {
@@ -416,10 +424,14 @@ internal sealed class Inbox : IInbox
             _logger?.LogDebug("Received email event for {EmailId}", emailEvent.EmailId);
 
             // Fetch full email data
-            var response = await _apiClient.GetEmailAsync(EmailAddress, emailEvent.EmailId);
-            var email = await ProcessEmailResponseAsync(response);
+            var response = await _apiClient.GetEmailAsync(EmailAddress, emailEvent.EmailId, ct);
+            var email = await ProcessEmailResponseAsync(response, ct);
 
-            await _emailChannel.Writer.WriteAsync(email);
+            await _emailChannel.Writer.WriteAsync(email, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected during disposal - don't log as error
         }
         catch (Exception ex)
         {
@@ -431,13 +443,14 @@ internal sealed class Inbox : IInbox
     {
         try
         {
+            var ct = _inboxCts.Token;
             _logger?.LogDebug("Starting sync for inbox {EmailAddress}", EmailAddress);
 
             // Compute local hash from known email IDs
             var localHash = EmailHashCalculator.ComputeHash(_localEmailIds.Keys);
 
             // Get server sync status
-            var serverSync = await _apiClient.GetInboxSyncAsync(EmailAddress);
+            var serverSync = await _apiClient.GetInboxSyncAsync(EmailAddress, ct);
 
             if (localHash == serverSync.EmailsHash)
             {
@@ -450,7 +463,7 @@ internal sealed class Inbox : IInbox
                 EmailAddress, localHash, serverSync.EmailsHash);
 
             // Fetch all email IDs from server (metadata only for speed)
-            var serverEmails = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: false);
+            var serverEmails = await _apiClient.GetEmailsAsync(EmailAddress, includeContent: false, ct);
             var serverEmailIds = new HashSet<string>(serverEmails.Select(e => e.Id));
 
             // Find new emails (on server but not local)
@@ -478,9 +491,14 @@ internal sealed class Inbox : IInbox
 
                 try
                 {
-                    var response = await _apiClient.GetEmailAsync(EmailAddress, newEmailId);
-                    var email = await ProcessEmailResponseAsync(response);
-                    await _emailChannel.Writer.WriteAsync(email);
+                    var response = await _apiClient.GetEmailAsync(EmailAddress, newEmailId, ct);
+                    var email = await ProcessEmailResponseAsync(response, ct);
+                    await _emailChannel.Writer.WriteAsync(email, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected during disposal
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -491,6 +509,10 @@ internal sealed class Inbox : IInbox
             }
 
             _logger?.LogDebug("Sync completed for inbox {EmailAddress}", EmailAddress);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected during disposal - don't log as error
         }
         catch (Exception ex)
         {
@@ -507,11 +529,17 @@ internal sealed class Inbox : IInbox
     {
         if (response.IsEncrypted)
         {
+            if (_cryptoProvider is null || _keyPair is null || _serverSigPk is null)
+            {
+                throw new InvalidOperationException(
+                    "Cannot decrypt email: inbox was created without encryption support.");
+            }
+
             // Encrypted format: decrypt the metadata
             var metadataBytes = await _cryptoProvider.DecryptAsync(
                 response.EncryptedMetadata!,
-                _keyPair!.SecretKey,
-                _serverSigPk!,
+                _keyPair.SecretKey,
+                _serverSigPk,
                 ct);
 
             return System.Text.Json.JsonSerializer.Deserialize(
@@ -544,13 +572,19 @@ internal sealed class Inbox : IInbox
 
         if (response.IsEncrypted)
         {
+            if (_cryptoProvider is null || _keyPair is null || _serverSigPk is null)
+            {
+                throw new InvalidOperationException(
+                    "Cannot decrypt email: inbox was created without encryption support.");
+            }
+
             // Encrypted format: decrypt parsed content if present
             if (response.EncryptedParsed is not null)
             {
                 var parsedBytes = await _cryptoProvider.DecryptAsync(
                     response.EncryptedParsed,
-                    _keyPair!.SecretKey,
-                    _serverSigPk!,
+                    _keyPair.SecretKey,
+                    _serverSigPk,
                     ct);
 
                 parsed = System.Text.Json.JsonSerializer.Deserialize(
@@ -747,6 +781,9 @@ internal sealed class Inbox : IInbox
 
         IsDisposed = true;
 
+        // Cancel pending operations first
+        await _inboxCts.CancelAsync();
+
         if (_isSubscribed)
         {
             await _deliveryStrategy.UnsubscribeAsync(InboxHash);
@@ -754,6 +791,7 @@ internal sealed class Inbox : IInbox
 
         _emailChannel.Writer.Complete();
         _subscriptionLock.Dispose();
+        _inboxCts.Dispose();
 
         _logger?.LogDebug("Disposed inbox {EmailAddress}", EmailAddress);
     }

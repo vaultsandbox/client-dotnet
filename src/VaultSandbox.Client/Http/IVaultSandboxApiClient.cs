@@ -1,3 +1,4 @@
+using System.Net.Http;
 using VaultSandbox.Client.Http.Models;
 
 namespace VaultSandbox.Client.Http;
@@ -67,8 +68,8 @@ internal interface IVaultSandboxApiClient : IDisposable
     /// </summary>
     /// <param name="inboxHashes">Inbox hashes to subscribe to.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The HTTP response stream for SSE parsing.</returns>
-    Task<Stream> GetEventsStreamAsync(IEnumerable<string> inboxHashes, CancellationToken ct = default);
+    /// <returns>The HTTP response for SSE parsing. Caller is responsible for disposing.</returns>
+    Task<HttpResponseMessage> GetEventsResponseAsync(IEnumerable<string> inboxHashes, CancellationToken ct = default);
 
     // --- Inbox Webhooks ---
 

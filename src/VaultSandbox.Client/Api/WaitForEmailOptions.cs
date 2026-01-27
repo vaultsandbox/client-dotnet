@@ -7,6 +7,14 @@ namespace VaultSandbox.Client.Api;
 /// </summary>
 public sealed class WaitForEmailOptions
 {
+    private Regex? _subjectRegex;
+    private Regex? _fromRegex;
+
+    /// <summary>
+    /// Timeout for regex matching to prevent ReDoS attacks.
+    /// </summary>
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
     /// <summary>
     /// Match emails with this exact subject, or use regex pattern.
     /// </summary>
@@ -44,18 +52,58 @@ public sealed class WaitForEmailOptions
     {
         if (Subject is not null)
         {
-            var matches = UseRegex
-                ? Regex.IsMatch(email.Subject, Subject, RegexOptions.IgnoreCase)
-                : email.Subject.Equals(Subject, StringComparison.OrdinalIgnoreCase);
+            bool matches;
+            if (UseRegex)
+            {
+                try
+                {
+                    _subjectRegex ??= new Regex(
+                        Subject,
+                        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+                        RegexTimeout);
+                    matches = _subjectRegex.IsMatch(email.Subject);
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new ArgumentException(
+                        $"Invalid regex pattern for Subject filter: {Subject}",
+                        nameof(Subject),
+                        ex);
+                }
+            }
+            else
+            {
+                matches = email.Subject.Equals(Subject, StringComparison.OrdinalIgnoreCase);
+            }
 
             if (!matches) return false;
         }
 
         if (From is not null)
         {
-            var matches = UseRegex
-                ? Regex.IsMatch(email.From, From, RegexOptions.IgnoreCase)
-                : email.From.Contains(From, StringComparison.OrdinalIgnoreCase);
+            bool matches;
+            if (UseRegex)
+            {
+                try
+                {
+                    _fromRegex ??= new Regex(
+                        From,
+                        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+                        RegexTimeout);
+                    matches = _fromRegex.IsMatch(email.From);
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new ArgumentException(
+                        $"Invalid regex pattern for From filter: {From}",
+                        nameof(From),
+                        ex);
+                }
+            }
+            else
+            {
+                matches = email.From.Contains(From, StringComparison.OrdinalIgnoreCase);
+            }
 
             if (!matches) return false;
         }
