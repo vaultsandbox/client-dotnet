@@ -7,7 +7,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// <summary>
 /// Integration tests for inbox monitoring functionality.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class MonitoringTests : IntegrationTestBase
 {

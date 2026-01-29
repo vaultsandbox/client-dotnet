@@ -16,7 +16,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// Tests that validate the examples shown in the README.md file.
 /// These ensure documentation stays in sync with actual behavior.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 [Trait("Category", "ReadmeExamples")]
 public class ReadmeExamplesTests : IntegrationTestBase

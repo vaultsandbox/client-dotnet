@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.2] - 2026-01-29
+
+### Changed
+
+- Replaced Task.Delay with TCS-based synchronization in unit tests
+- Enabled integration test parallelization for faster test execution
+
 ## [0.9.1] - 2026-01-28
 
 ### Added

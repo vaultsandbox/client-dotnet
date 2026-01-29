@@ -9,7 +9,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// <summary>
 /// Integration tests for edge cases and boundary conditions.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class EdgeCaseTests : IntegrationTestBase
 {

@@ -11,7 +11,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// Integration tests for delivery strategies against a real server.
 /// Tests require a configured .env file with valid credentials.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class DeliveryStrategyIntegrationTests : IAsyncLifetime
 {

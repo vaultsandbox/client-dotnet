@@ -8,7 +8,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// <summary>
 /// Integration tests for email operations using the full client with real SMTP.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class EmailIntegrationTests : IntegrationTestBase
 {

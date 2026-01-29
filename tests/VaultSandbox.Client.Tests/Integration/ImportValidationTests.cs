@@ -10,7 +10,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// Integration tests for import validation.
 /// Tests various invalid import data scenarios per VaultSandbox spec Section 10.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class ImportValidationTests : IntegrationTestBase
 {

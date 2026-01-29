@@ -46,7 +46,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task SubscribeAsync_DuplicateInbox_ShouldThrowInvalidOperationException()
     {
         // Arrange
-        SetupSseStreamSuccess();
+        var signalingStream = SetupSseStreamSuccessWithSignaling();
 
         await _strategy.SubscribeAsync(
             "inbox1",
@@ -54,7 +54,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(100);
+        await signalingStream.ReadAttempted.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Act
         Func<Task> act = () => _strategy.SubscribeAsync(
@@ -91,7 +91,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task UnsubscribeAsync_MultipleTimes_ShouldBeIdempotent()
     {
         // Arrange
-        SetupSseStreamSuccess();
+        var signalingStream = SetupSseStreamSuccessWithSignaling();
 
         await _strategy.SubscribeAsync(
             "inbox1",
@@ -99,7 +99,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(100);
+        await signalingStream.ReadAttempted.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Act & Assert - Multiple unsubscribe calls should not throw
         await _strategy.UnsubscribeAsync("inbox1");
@@ -130,7 +130,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task SubscribeAsync_WhenSuccessful_ShouldSetIsConnectedToTrue()
     {
         // Arrange
-        SetupSseStreamSuccess();
+        var signalingStream = SetupSseStreamSuccessWithSignaling();
 
         // Act
         await _strategy.SubscribeAsync(
@@ -140,7 +140,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             TimeSpan.FromSeconds(2));
 
         // Wait for connection to establish
-        await Task.Delay(100);
+        await signalingStream.ReadAttempted.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert
         _strategy.IsConnected.Should().BeTrue();
@@ -156,15 +156,17 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         // Arrange
         var connectionAttempts = 0;
         var failingStream = new FailAfterReadStream(bytesToReadBeforeFail: 0);
+        var reconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     return CreateSseResponse(failingStream);
                 }
+                reconnected.TrySetResult();
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -175,8 +177,8 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        // Wait for reconnection attempts
-        await Task.Delay(500);
+        // Wait for reconnection
+        await reconnected.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have attempted to reconnect
         connectionAttempts.Should().BeGreaterThan(1);
@@ -186,13 +188,13 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task InvokeReconnectCallbacks_OnReconnection_ShouldCallAllCallbacks()
     {
         // Arrange
-        var reconnectCallbackInvoked = false;
+        var reconnectCallbackInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connectionAttempts = 0;
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
+                Interlocked.Increment(ref connectionAttempts);
                 if (connectionAttempts == 1)
                 {
                     // First connection succeeds then stream fails
@@ -210,15 +212,14 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             TimeSpan.FromSeconds(2),
             onReconnected: () =>
             {
-                reconnectCallbackInvoked = true;
+                reconnectCallbackInvoked.TrySetResult();
                 return Task.CompletedTask;
             });
 
-        // Wait for reconnection
-        await Task.Delay(500);
+        // Wait for reconnection callback
+        await reconnectCallbackInvoked.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        // Assert
-        reconnectCallbackInvoked.Should().BeTrue();
+        // Assert - callback was invoked (implicit by not timing out)
     }
 
     [Fact]
@@ -226,7 +227,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var reconnectCallbackInvoked = false;
-        SetupSseStreamSuccess();
+        var signalingStream = SetupSseStreamSuccessWithSignaling();
 
         // Act
         await _strategy.SubscribeAsync(
@@ -240,8 +241,8 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
                 return Task.CompletedTask;
             });
 
-        // Wait for connection
-        await Task.Delay(200);
+        // Wait for connection to establish
+        await signalingStream.ReadAttempted.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Callback should NOT be called on initial connection
         reconnectCallbackInvoked.Should().BeFalse();
@@ -251,14 +252,14 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task InvokeReconnectCallbacks_WhenCallbackThrows_ShouldContinueWithOtherCallbacks()
     {
         // Arrange
-        var callback1Invoked = false;
-        var callback2Invoked = false;
+        var callback1Invoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callback2Invoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connectionAttempts = 0;
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
+                Interlocked.Increment(ref connectionAttempts);
                 if (connectionAttempts == 1)
                 {
                     return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 10));
@@ -274,7 +275,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             TimeSpan.FromSeconds(2),
             onReconnected: () =>
             {
-                callback1Invoked = true;
+                callback1Invoked.TrySetResult();
                 throw new InvalidOperationException("Callback 1 failed");
             });
 
@@ -286,16 +287,16 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             TimeSpan.FromSeconds(2),
             onReconnected: () =>
             {
-                callback2Invoked = true;
+                callback2Invoked.TrySetResult();
                 return Task.CompletedTask;
             });
 
-        // Wait for reconnection
-        await Task.Delay(500);
+        // Wait for both callbacks to be invoked
+        await Task.WhenAll(
+            callback1Invoked.Task.WaitAsync(TimeSpan.FromSeconds(5)),
+            callback2Invoked.Task.WaitAsync(TimeSpan.FromSeconds(5)));
 
-        // Assert - Both callbacks should be invoked despite first one throwing
-        callback1Invoked.Should().BeTrue();
-        callback2Invoked.Should().BeTrue();
+        // Assert - Both callbacks were invoked (implicit by not timing out)
     }
 
     [Fact]
@@ -303,11 +304,21 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var initialConnectionReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reconnectAfterUnsubscribe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
+                {
+                    initialConnectionReady.TrySetResult();
+                }
+                else
+                {
+                    reconnectAfterUnsubscribe.TrySetResult();
+                }
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -323,12 +334,12 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(100);
+        await initialConnectionReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var attemptsBeforeUnsubscribe = connectionAttempts;
 
         // Act - Unsubscribe one inbox (should trigger reconnect with remaining inbox)
         await _strategy.UnsubscribeAsync("inbox1");
-        await Task.Delay(200);
+        await reconnectAfterUnsubscribe.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have reconnected with updated subscription list
         connectionAttempts.Should().BeGreaterThan(attemptsBeforeUnsubscribe);
@@ -339,7 +350,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task DisconnectAsync_WhenLastSubscriptionRemoved_ShouldDisconnect()
     {
         // Arrange
-        SetupSseStreamSuccess();
+        var signalingStream = SetupSseStreamSuccessWithSignaling();
 
         await _strategy.SubscribeAsync(
             "inbox1",
@@ -347,14 +358,13 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(100);
+        await signalingStream.ReadAttempted.WaitAsync(TimeSpan.FromSeconds(5));
         _strategy.IsConnected.Should().BeTrue();
 
         // Act - Remove the last subscription
         await _strategy.UnsubscribeAsync("inbox1");
-        await Task.Delay(100);
 
-        // Assert
+        // Assert - IsConnected should become false after unsubscribe
         _strategy.IsConnected.Should().BeFalse();
     }
 
@@ -386,6 +396,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var maxAttemptsReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var options = new VaultSandboxClientOptions
         {
             BaseUrl = "https://test.example.com",
@@ -399,11 +410,16 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     // First connection succeeds
                     return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5));
+                }
+                // Signal when we've exceeded max attempts
+                if (attempt >= options.SseMaxReconnectAttempts + 1)
+                {
+                    maxAttemptsReached.TrySetResult();
                 }
                 // Subsequent connections fail
                 throw new IOException("Connection refused");
@@ -419,7 +435,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             TimeSpan.FromSeconds(2));
 
         // Wait for max reconnect attempts to be exceeded
-        await Task.Delay(1000);
+        await maxAttemptsReached.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Connection attempts should exceed max + 1 (initial + retries)
         connectionAttempts.Should().BeGreaterThanOrEqualTo(options.SseMaxReconnectAttempts + 1);
@@ -430,19 +446,21 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var finalConnectionReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5));
                 }
-                if (connectionAttempts < 4)
+                if (attempt < 4)
                 {
                     throw new HttpRequestException("Temporary network error");
                 }
+                finalConnectionReady.TrySetResult();
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -453,7 +471,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(800);
+        await finalConnectionReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have retried and eventually connected
         connectionAttempts.Should().BeGreaterThanOrEqualTo(3);
@@ -464,19 +482,21 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var finalConnectionReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5));
                 }
-                if (connectionAttempts == 2)
+                if (attempt == 2)
                 {
                     throw new IOException("Network stream closed");
                 }
+                finalConnectionReady.TrySetResult();
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -487,7 +507,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(500);
+        await finalConnectionReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert
         connectionAttempts.Should().BeGreaterThanOrEqualTo(2);
@@ -502,16 +522,18 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var reconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     // First stream ends gracefully (returns 0 bytes)
                     return CreateSseResponse(new EndingStream());
                 }
+                reconnected.TrySetResult();
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -522,7 +544,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(500);
+        await reconnected.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have reconnected after stream ended
         connectionAttempts.Should().BeGreaterThan(1);
@@ -533,15 +555,17 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var reconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     return CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 10));
                 }
+                reconnected.TrySetResult();
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -552,7 +576,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(500);
+        await reconnected.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert
         connectionAttempts.Should().BeGreaterThan(1);
@@ -588,18 +612,20 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var reconnectAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cts = new CancellationTokenSource();
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .Returns((IEnumerable<string> _, CancellationToken ct) =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     // First connection succeeds then stream fails
                     return Task.FromResult(CreateSseResponse(new FailAfterReadStream(bytesToReadBeforeFail: 5)));
                 }
-                // Cancel during reconnection
+                // Signal that reconnection was attempted, then cancel
+                reconnectAttempted.TrySetResult();
                 cts.Cancel();
                 throw new OperationCanceledException(ct);
             });
@@ -612,8 +638,8 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             TimeSpan.FromSeconds(2),
             ct: cts.Token);
 
-        // Wait for reconnection attempt and cancellation
-        await Task.Delay(500);
+        // Wait for reconnection attempt
+        await reconnectAttempted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have attempted reconnection then stopped
         connectionAttempts.Should().BeGreaterThanOrEqualTo(2);
@@ -627,7 +653,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     public async Task SubscribeAsync_WhenStreamReturned_ShouldBeConnected()
     {
         // Arrange
-        SetupSseStreamSuccess();
+        var signalingStream = SetupSseStreamSuccessWithSignaling();
 
         // Act
         await _strategy.SubscribeAsync(
@@ -636,7 +662,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(100);
+        await signalingStream.ReadAttempted.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert
         _strategy.IsConnected.Should().BeTrue();
@@ -647,16 +673,18 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionAttempts = 0;
+        var reconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionAttempts++;
-                if (connectionAttempts == 1)
+                var attempt = Interlocked.Increment(ref connectionAttempts);
+                if (attempt == 1)
                 {
                     // First stream ends immediately
                     return CreateSseResponse(new EndingStream());
                 }
+                reconnected.TrySetResult();
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -668,7 +696,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             TimeSpan.FromSeconds(2));
 
         // Wait for reconnection
-        await Task.Delay(500);
+        await reconnected.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have reconnected
         connectionAttempts.Should().BeGreaterThan(1);
@@ -709,11 +737,13 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var connectionCount = 0;
+        var connectionReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                connectionCount++;
+                Interlocked.Increment(ref connectionCount);
+                connectionReady.TrySetResult();
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -730,7 +760,7 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(200);
+        await connectionReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Both subscriptions should be using the same connection (with reconnect)
         // Note: Second subscription triggers a reconnect to update the subscription list
@@ -743,11 +773,27 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var requestedInboxes = new List<string[]>();
+        var initialConnectionReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reconnectedWithRemaining = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connectionCount = 0;
 
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IEnumerable<string> inboxes, CancellationToken _) =>
             {
-                requestedInboxes.Add(inboxes.ToArray());
+                var inboxArray = inboxes.ToArray();
+                lock (requestedInboxes)
+                {
+                    requestedInboxes.Add(inboxArray);
+                }
+                var count = Interlocked.Increment(ref connectionCount);
+                if (count == 1)
+                {
+                    initialConnectionReady.TrySetResult();
+                }
+                else if (inboxArray.Length == 1 && inboxArray[0] == "inbox2")
+                {
+                    reconnectedWithRemaining.TrySetResult();
+                }
                 return CreateSseResponse(new BlockingStream());
             });
 
@@ -763,14 +809,18 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromSeconds(2));
 
-        await Task.Delay(100);
+        await initialConnectionReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Act
         await _strategy.UnsubscribeAsync("inbox1");
-        await Task.Delay(200);
+        await reconnectedWithRemaining.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Last connection should only have inbox2
-        var lastRequest = requestedInboxes.Last();
+        string[] lastRequest;
+        lock (requestedInboxes)
+        {
+            lastRequest = requestedInboxes.Last();
+        }
         lastRequest.Should().ContainSingle().Which.Should().Be("inbox2");
     }
 
@@ -788,10 +838,70 @@ public class SseDeliveryStrategyTests : IAsyncDisposable
         return response;
     }
 
+    private SignalingBlockingStream SetupSseStreamSuccessWithSignaling()
+    {
+        var stream = new SignalingBlockingStream();
+        _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => CreateSseResponse(stream));
+        return stream;
+    }
+
     private void SetupSseStreamSuccess()
     {
         _mockApiClient.Setup(x => x.GetEventsResponseAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => CreateSseResponse(new BlockingStream()));
+    }
+
+    /// <summary>
+    /// A stream that blocks on read operations until cancelled, but signals when read is first attempted.
+    /// </summary>
+    private sealed class SignalingBlockingStream : Stream
+    {
+        private readonly TaskCompletionSource _readAttemptedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly SemaphoreSlim _semaphore = new(0);
+
+        public Task ReadAttempted => _readAttemptedTcs.Task;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => 0;
+
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            _readAttemptedTcs.TrySetResult();
+            await _semaphore.WaitAsync(cancellationToken);
+            return 0;
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            _readAttemptedTcs.TrySetResult();
+            await _semaphore.WaitAsync(cancellationToken);
+            return 0;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _semaphore.Release();
+                _semaphore.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 
     /// <summary>

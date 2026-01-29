@@ -1,18 +1,7 @@
-using Xunit;
-
 namespace VaultSandbox.Client.Tests.Integration;
 
 /// <summary>
-/// Test collection that disables parallel execution for integration tests.
-/// This prevents SMTP rate limiting and test isolation issues.
-/// </summary>
-[CollectionDefinition("Integration", DisableParallelization = true)]
-public class IntegrationTestCollection : ICollectionFixture<IntegrationTestFixture>
-{
-}
-
-/// <summary>
-/// Shared fixture for integration tests.
+/// Shared fixture for integration tests (currently empty, kept for future use).
 /// </summary>
 public class IntegrationTestFixture
 {

@@ -8,7 +8,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// <summary>
 /// Integration tests for inbox webhook operations.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class WebhookIntegrationTests : IntegrationTestBase
 {

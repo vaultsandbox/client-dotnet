@@ -569,7 +569,7 @@ public class InboxTests
     {
         // Arrange - This test covers lines 285-305 (the waiting loop)
         var inbox = CreateInbox();
-        Func<SseEmailEvent, Task>? capturedOnEmail = null;
+        var callbackCaptured = new TaskCompletionSource<Func<SseEmailEvent, Task>>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Setup delivery strategy to capture the onEmail callback
         _mockDeliveryStrategy
@@ -581,7 +581,7 @@ public class InboxTests
                 It.IsAny<Func<Task>?>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, string, Func<SseEmailEvent, Task>, TimeSpan, Func<Task>?, CancellationToken>(
-                (_, _, onEmail, _, _, _) => capturedOnEmail = onEmail)
+                (_, _, onEmail, _, _, _) => callbackCaptured.TrySetResult(onEmail))
             .Returns(Task.CompletedTask);
 
         // Initial count is 0, we want 2 emails
@@ -607,12 +607,11 @@ public class InboxTests
             Timeout = TimeSpan.FromSeconds(5)
         });
 
-        // Give time for subscription to happen
-        await Task.Delay(50);
+        // Wait for callback to be captured
+        var capturedOnEmail = await callbackCaptured.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         // Simulate emails arriving via the delivery strategy
-        capturedOnEmail.Should().NotBeNull();
-        await capturedOnEmail!(new SseEmailEvent
+        await capturedOnEmail(new SseEmailEvent
         {
             InboxId = TestInboxHash,
             EmailId = "email-1",
@@ -668,7 +667,7 @@ public class InboxTests
     {
         // Arrange - This test covers the success path in the waiting loop (lines 298-303)
         var inbox = CreateInbox();
-        Func<SseEmailEvent, Task>? capturedOnEmail = null;
+        var callbackCaptured = new TaskCompletionSource<Func<SseEmailEvent, Task>>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockDeliveryStrategy
             .Setup(x => x.SubscribeAsync(
@@ -679,7 +678,7 @@ public class InboxTests
                 It.IsAny<Func<Task>?>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, string, Func<SseEmailEvent, Task>, TimeSpan, Func<Task>?, CancellationToken>(
-                (_, _, onEmail, _, _, _) => capturedOnEmail = onEmail)
+                (_, _, onEmail, _, _, _) => callbackCaptured.TrySetResult(onEmail))
             .Returns(Task.CompletedTask);
 
         // Start with 1 email, need 3
@@ -704,12 +703,12 @@ public class InboxTests
             Timeout = TimeSpan.FromSeconds(5)
         });
 
-        await Task.Delay(50);
+        // Wait for callback to be captured
+        var capturedOnEmail = await callbackCaptured.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         // Simulate emails arriving - increase count each time
-        capturedOnEmail.Should().NotBeNull();
         emailCount = 2;
-        await capturedOnEmail!(new SseEmailEvent
+        await capturedOnEmail(new SseEmailEvent
         {
             InboxId = TestInboxHash,
             EmailId = "email-2",

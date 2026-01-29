@@ -11,7 +11,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// These tests verify that SPF, DKIM, DMARC, and ReverseDNS results are correctly
 /// deserialized from the wire format using the Result property name.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class AuthResultsParsingTests : IntegrationTestBase
 {

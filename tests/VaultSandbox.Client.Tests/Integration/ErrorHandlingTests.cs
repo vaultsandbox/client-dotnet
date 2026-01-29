@@ -7,7 +7,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// <summary>
 /// Tests for error handling scenarios including network errors.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class ErrorHandlingTests
 {

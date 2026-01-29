@@ -240,19 +240,32 @@ public class InboxMonitorTests
     public async Task WatchAsync_HandlesInboxDisposal()
     {
         // Arrange
+        var disposedExceptionThrown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var inbox = new Mock<IInbox>();
         inbox.Setup(x => x.EmailAddress).Returns("test@example.com");
         inbox.Setup(x => x.WatchAsync(It.IsAny<CancellationToken>()))
-            .Returns(ThrowsObjectDisposed);
+            .Returns(ThrowsObjectDisposedWithSignal(disposedExceptionThrown));
 
         var monitor = new InboxMonitor([inbox.Object]);
         monitor.Start();
 
-        // Wait briefly for the watch task to handle the ObjectDisposedException
-        await Task.Delay(100);
+        // Wait for the watch task to handle the ObjectDisposedException
+        await disposedExceptionThrown.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Act & Assert - Disposing should still work cleanly
         await monitor.DisposeAsync();
+    }
+
+    private static async IAsyncEnumerable<Email> ThrowsObjectDisposedWithSignal(
+        TaskCompletionSource signal,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.Yield();
+        signal.TrySetResult();
+        throw new ObjectDisposedException("Inbox");
+#pragma warning disable CS0162 // Unreachable code
+        yield break;
+#pragma warning restore CS0162
     }
 
     private static async IAsyncEnumerable<Email> ThrowsObjectDisposed(

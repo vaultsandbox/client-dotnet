@@ -7,7 +7,6 @@ namespace VaultSandbox.Client.Tests.Integration;
 /// <summary>
 /// Integration tests for import/export file operations.
 /// </summary>
-[Collection("Integration")]
 [Trait("Category", "Integration")]
 public class ImportExportFileTests : IntegrationTestBase, IDisposable
 {

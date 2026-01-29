@@ -65,7 +65,10 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
     public async Task UnsubscribeAsync_ShouldRemoveSubscription()
     {
         // Arrange
-        SetupInboxSync("hash1");
+        var pollStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => pollStarted.TrySetResult())
+            .ReturnsAsync(new InboxSyncResponse { EmailCount = 0, EmailsHash = "hash1" });
 
         await _strategy.SubscribeAsync(
             "inbox1",
@@ -73,9 +76,10 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromMilliseconds(100));
 
+        await pollStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
         // Act
         await _strategy.UnsubscribeAsync("inbox1");
-        await Task.Delay(50);
 
         // Assert
         _strategy.IsConnected.Should().BeFalse();
@@ -87,19 +91,21 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
         // Arrange - Use the hash of an empty set which is what the local state will compute
         var emptyHash = ComputeEmailHash([]);
         var pollCount = 0;
+        var targetPollsReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback(() => pollCount++)
+            .Callback(() => { if (Interlocked.Increment(ref pollCount) >= 3) targetPollsReached.TrySetResult(); })
             .ReturnsAsync(new InboxSyncResponse { EmailCount = 0, EmailsHash = emptyHash });
 
-        // Act - Start polling with 50ms interval
+        // Act - Start polling with 10ms interval for faster test
         await _strategy.SubscribeAsync(
             "inbox1",
             "test@example.com",
             _ => Task.CompletedTask,
-            TimeSpan.FromMilliseconds(50));
+            TimeSpan.FromMilliseconds(10));
 
-        // Wait for several polling cycles
-        await Task.Delay(300);
+        // Wait for target poll count
+        await targetPollsReached.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have polled multiple times
         pollCount.Should().BeGreaterThan(1, "polling should have occurred multiple times");
@@ -111,6 +117,7 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange - First poll returns email, subsequent polls return matching hash
         var pollCount = 0;
+        var targetPollsReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var encryptedPayload = CreateTestEncryptedPayload();
         var emailId = "email-1";
         var stableHash = ComputeEmailHash([emailId]);
@@ -118,9 +125,10 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
         _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                pollCount++;
+                var count = Interlocked.Increment(ref pollCount);
+                if (count >= 3) targetPollsReached.TrySetResult();
                 // First poll triggers fetch (different hash), subsequent polls return stable hash
-                return pollCount == 1
+                return count == 1
                     ? new InboxSyncResponse { EmailCount = 1, EmailsHash = "initial-different-hash" }
                     : new InboxSyncResponse { EmailCount = 1, EmailsHash = stableHash };
             });
@@ -140,9 +148,9 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
             "inbox1",
             "test@example.com",
             _ => Task.CompletedTask,
-            TimeSpan.FromMilliseconds(30));
+            TimeSpan.FromMilliseconds(10));
 
-        await Task.Delay(200);
+        await targetPollsReached.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - Should have polled multiple times, reaching the "no changes" path
         pollCount.Should().BeGreaterThan(2, "should have multiple polls including no-changes polls");
@@ -153,7 +161,13 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
     public async Task ConcurrentPolling_MultipleInboxes_ShouldAllPoll()
     {
         // Arrange
-        SetupInboxSync("hash1");
+        var pollCount = 0;
+        var allPolled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => { if (Interlocked.Increment(ref pollCount) >= 3) allPolled.TrySetResult(); })
+            .ReturnsAsync(new InboxSyncResponse { EmailCount = 0, EmailsHash = "hash1" });
+
         var callbacks = new Dictionary<string, int>
         {
             ["inbox1"] = 0,
@@ -168,23 +182,23 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
                 "inbox1",
                 "test1@example.com",
                 _ => { callbacks["inbox1"]++; return Task.CompletedTask; },
-                TimeSpan.FromMilliseconds(500)),
+                TimeSpan.FromMilliseconds(100)),
             _strategy.SubscribeAsync(
                 "inbox2",
                 "test2@example.com",
                 _ => { callbacks["inbox2"]++; return Task.CompletedTask; },
-                TimeSpan.FromMilliseconds(500)),
+                TimeSpan.FromMilliseconds(100)),
             _strategy.SubscribeAsync(
                 "inbox3",
                 "test3@example.com",
                 _ => { callbacks["inbox3"]++; return Task.CompletedTask; },
-                TimeSpan.FromMilliseconds(500))
+                TimeSpan.FromMilliseconds(100))
         };
 
         await Task.WhenAll(tasks);
 
-        // Wait for a few polling cycles
-        await Task.Delay(350);
+        // Wait for all inboxes to be polled at least once
+        await allPolled.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - All inboxes should be polled
         _strategy.IsConnected.Should().BeTrue();
@@ -215,6 +229,7 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var receivedEvents = new List<SseEmailEvent>();
+        var eventReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var pollCount = 0;
         var encryptedPayload = CreateTestEncryptedPayload();
 
@@ -222,7 +237,7 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
         _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                pollCount++;
+                Interlocked.Increment(ref pollCount);
                 // Return a different hash to trigger email fetch
                 return new InboxSyncResponse { EmailCount = 1, EmailsHash = $"hash-{pollCount}" };
             });
@@ -241,10 +256,10 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
         await _strategy.SubscribeAsync(
             "inbox1",
             "test@example.com",
-            evt => { receivedEvents.Add(evt); return Task.CompletedTask; },
-            TimeSpan.FromMilliseconds(50));
+            evt => { receivedEvents.Add(evt); eventReceived.TrySetResult(); return Task.CompletedTask; },
+            TimeSpan.FromMilliseconds(10));
 
-        await Task.Delay(200);
+        await eventReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert
         receivedEvents.Should().NotBeEmpty();
@@ -256,14 +271,16 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var pollCount = 0;
+        var deletionPolled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var encryptedPayload = CreateTestEncryptedPayload();
 
         // First poll returns one email, second poll returns empty (email deleted)
         _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
-                pollCount++;
-                return new InboxSyncResponse { EmailCount = pollCount == 1 ? 1 : 0, EmailsHash = $"hash-{pollCount}" };
+                var count = Interlocked.Increment(ref pollCount);
+                if (count >= 2) deletionPolled.TrySetResult();
+                return new InboxSyncResponse { EmailCount = count == 1 ? 1 : 0, EmailsHash = $"hash-{count}" };
             });
 
         _mockApiClient.Setup(x => x.GetEmailsAsync(It.IsAny<string>(), false, It.IsAny<CancellationToken>()))
@@ -290,9 +307,9 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
             "inbox1",
             "test@example.com",
             _ => Task.CompletedTask,
-            TimeSpan.FromMilliseconds(50));
+            TimeSpan.FromMilliseconds(10));
 
-        await Task.Delay(250);
+        await deletionPolled.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert - polling should continue without errors
         _strategy.IsConnected.Should().BeTrue();
@@ -304,8 +321,10 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
     {
         // Arrange
         var pollCount = 0;
+        var pollStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback(() => pollCount++)
+            .Callback(() => { Interlocked.Increment(ref pollCount); pollStarted.TrySetResult(); })
             .ReturnsAsync(new InboxSyncResponse { EmailCount = 0, EmailsHash = "hash1" });
 
         await _strategy.SubscribeAsync(
@@ -314,7 +333,7 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
             _ => Task.CompletedTask,
             TimeSpan.FromMilliseconds(50));
 
-        await Task.Delay(100);
+        await pollStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Act
         await _strategy.DisposeAsync();
@@ -328,12 +347,17 @@ public class PollingDeliveryStrategyTests : IAsyncDisposable
     public async Task DisposeAsync_WithMultipleSubscriptions_ShouldCancelAll()
     {
         // Arrange
-        SetupInboxSync("hash1");
+        var pollCount = 0;
+        var bothSubscribed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        await _strategy.SubscribeAsync("inbox1", "test1@example.com", _ => Task.CompletedTask, TimeSpan.FromMilliseconds(100));
-        await _strategy.SubscribeAsync("inbox2", "test2@example.com", _ => Task.CompletedTask, TimeSpan.FromMilliseconds(100));
+        _mockApiClient.Setup(x => x.GetInboxSyncAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => { if (Interlocked.Increment(ref pollCount) >= 2) bothSubscribed.TrySetResult(); })
+            .ReturnsAsync(new InboxSyncResponse { EmailCount = 0, EmailsHash = "hash1" });
 
-        await Task.Delay(50);
+        await _strategy.SubscribeAsync("inbox1", "test1@example.com", _ => Task.CompletedTask, TimeSpan.FromMilliseconds(50));
+        await _strategy.SubscribeAsync("inbox2", "test2@example.com", _ => Task.CompletedTask, TimeSpan.FromMilliseconds(50));
+
+        await bothSubscribed.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Act
         await _strategy.DisposeAsync();
