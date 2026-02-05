@@ -16,6 +16,7 @@ namespace VaultSandbox.Client.Http.Models;
 [JsonSerializable(typeof(ServerInfoResponse))]
 [JsonSerializable(typeof(AlgorithmInfo))]
 [JsonSerializable(typeof(Api.EncryptionPolicy))]
+[JsonSerializable(typeof(Api.PersistencePolicy))]
 [JsonSerializable(typeof(CreateInboxRequest))]
 [JsonSerializable(typeof(CreateInboxResponse))]
 [JsonSerializable(typeof(DeleteAllInboxesResponse))]

@@ -40,6 +40,12 @@ public sealed record InboxExport
     public bool Encrypted { get; init; } = true;
 
     /// <summary>
+    /// Whether this inbox is persistent.
+    /// </summary>
+    [JsonPropertyName("persistent")]
+    public bool Persistent { get; init; }
+
+    /// <summary>
     /// Whether email authentication checks are enabled for this inbox.
     /// </summary>
     [JsonPropertyName("emailAuth")]

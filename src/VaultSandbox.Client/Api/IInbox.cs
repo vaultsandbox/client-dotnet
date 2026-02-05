@@ -28,6 +28,11 @@ public interface IInbox : IAsyncDisposable
     bool Encrypted { get; }
 
     /// <summary>
+    /// Whether this inbox is persistent (emails survive server restarts).
+    /// </summary>
+    bool Persistent { get; }
+
+    /// <summary>
     /// Whether email authentication checks (SPF, DKIM, DMARC, PTR) are enabled for this inbox.
     /// When false, all authentication results return Skipped status.
     /// </summary>

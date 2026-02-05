@@ -119,6 +119,16 @@ public sealed record ServerInfo
     public bool ChaosEnabled { get; init; }
 
     /// <summary>
+    /// Server's persistence policy for inboxes.
+    /// </summary>
+    public required PersistencePolicy PersistencePolicy { get; init; }
+
+    /// <summary>
+    /// Whether global webhooks are persistent on this server.
+    /// </summary>
+    public bool PersistentGlobalWebhooks { get; init; }
+
+    /// <summary>
     /// Whether per-inbox encryption override is allowed (policy is 'enabled' or 'disabled').
     /// </summary>
     public bool CanOverrideEncryption => EncryptionPolicy is EncryptionPolicy.Enabled or EncryptionPolicy.Disabled;
@@ -127,6 +137,16 @@ public sealed record ServerInfo
     /// Whether encryption is enabled by default (policy is 'always' or 'enabled').
     /// </summary>
     public bool DefaultEncrypted => EncryptionPolicy is EncryptionPolicy.Always or EncryptionPolicy.Enabled;
+
+    /// <summary>
+    /// Whether per-inbox persistence override is allowed (policy is 'enabled' or 'disabled').
+    /// </summary>
+    public bool CanOverridePersistence => PersistencePolicy is PersistencePolicy.Enabled or PersistencePolicy.Disabled;
+
+    /// <summary>
+    /// Whether persistence is enabled by default (policy is 'always' or 'enabled').
+    /// </summary>
+    public bool DefaultPersistent => PersistencePolicy is PersistencePolicy.Always or PersistencePolicy.Enabled;
 }
 
 /// <summary>
@@ -155,6 +175,37 @@ public enum EncryptionPolicy
 
     /// <summary>
     /// All inboxes are plain. Per-inbox override is not allowed.
+    /// </summary>
+    [JsonPropertyName("never")]
+    Never
+}
+
+/// <summary>
+/// Server persistence policy for inbox creation.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<PersistencePolicy>))]
+public enum PersistencePolicy
+{
+    /// <summary>
+    /// All inboxes are persistent. Per-inbox override is not allowed.
+    /// </summary>
+    [JsonPropertyName("always")]
+    Always,
+
+    /// <summary>
+    /// Inboxes are persistent by default. Can request ephemeral inboxes.
+    /// </summary>
+    [JsonPropertyName("enabled")]
+    Enabled,
+
+    /// <summary>
+    /// Inboxes are ephemeral by default. Can request persistent inboxes.
+    /// </summary>
+    [JsonPropertyName("disabled")]
+    Disabled,
+
+    /// <summary>
+    /// All inboxes are ephemeral. Per-inbox override is not allowed.
     /// </summary>
     [JsonPropertyName("never")]
     Never
