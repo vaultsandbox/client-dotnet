@@ -68,6 +68,7 @@ async Task CreateInbox(IVaultSandboxClient client)
         expiresAt = exported.ExpiresAt.ToString("O"),
         inboxHash = exported.InboxHash,
         encrypted = exported.Encrypted,
+        emailAuth = exported.EmailAuth,
         serverSigPk = exported.ServerSigPk,
         secretKey = exported.SecretKey,
         exportedAt = exported.ExportedAt.ToString("O")
@@ -87,6 +88,8 @@ async Task ImportInbox(IVaultSandboxClient client)
         EmailAddress = data.GetProperty("emailAddress").GetString()!,
         ExpiresAt = DateTimeOffset.Parse(data.GetProperty("expiresAt").GetString()!),
         InboxHash = data.GetProperty("inboxHash").GetString()!,
+        Encrypted = data.TryGetProperty("encrypted", out var enc) ? enc.GetBoolean() : true,
+        EmailAuth = data.TryGetProperty("emailAuth", out var ea) ? ea.GetBoolean() : true,
         ServerSigPk = data.GetProperty("serverSigPk").GetString()!,
         SecretKey = data.GetProperty("secretKey").GetString()!,
         ExportedAt = DateTimeOffset.Parse(data.GetProperty("exportedAt").GetString()!)
@@ -107,6 +110,8 @@ async Task ReadEmails(IVaultSandboxClient client)
         EmailAddress = data.GetProperty("emailAddress").GetString()!,
         ExpiresAt = DateTimeOffset.Parse(data.GetProperty("expiresAt").GetString()!),
         InboxHash = data.GetProperty("inboxHash").GetString()!,
+        Encrypted = data.TryGetProperty("encrypted", out var enc2) ? enc2.GetBoolean() : true,
+        EmailAuth = data.TryGetProperty("emailAuth", out var ea2) ? ea2.GetBoolean() : true,
         ServerSigPk = data.GetProperty("serverSigPk").GetString()!,
         SecretKey = data.GetProperty("secretKey").GetString()!,
         ExportedAt = DateTimeOffset.Parse(data.GetProperty("exportedAt").GetString()!)
