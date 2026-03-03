@@ -49,6 +49,14 @@ public sealed record CreateInboxRequest
     public bool? SpamAnalysis { get; init; }
 
     /// <summary>
+    /// Requested persistence mode for the inbox. If omitted, the server uses its default based on policy.
+    /// Only applicable when the server policy allows overrides ('enabled' or 'disabled').
+    /// </summary>
+    [JsonPropertyName("persistence")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Persistence { get; init; }
+
+    /// <summary>
     /// Optional chaos configuration to enable chaos engineering for this inbox.
     /// Requires chaos to be enabled globally on the server.
     /// </summary>

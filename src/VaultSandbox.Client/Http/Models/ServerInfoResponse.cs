@@ -48,6 +48,18 @@ public sealed record ServerInfoResponse
     /// </summary>
     [JsonPropertyName("chaosEnabled")]
     public bool ChaosEnabled { get; init; }
+
+    /// <summary>
+    /// Server's persistence policy for inboxes.
+    /// </summary>
+    [JsonPropertyName("persistencePolicy")]
+    public PersistencePolicy PersistencePolicy { get; init; } = PersistencePolicy.Disabled;
+
+    /// <summary>
+    /// Whether global webhooks are persistent on this server.
+    /// </summary>
+    [JsonPropertyName("persistentGlobalWebhooks")]
+    public bool PersistentGlobalWebhooks { get; init; }
 }
 
 /// <summary>

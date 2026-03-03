@@ -36,4 +36,10 @@ public sealed record CreateInboxResponse
     /// </summary>
     [JsonPropertyName("encrypted")]
     public bool Encrypted { get; init; } = true;
+
+    /// <summary>
+    /// Whether the inbox is persistent.
+    /// </summary>
+    [JsonPropertyName("persistent")]
+    public bool Persistent { get; init; }
 }

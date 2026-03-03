@@ -91,6 +91,14 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 _ => null
             };
 
+            // Determine persistence mode
+            string? persistenceParam = options?.Persistence switch
+            {
+                InboxPersistence.Persistent => "persistent",
+                InboxPersistence.Ephemeral => "ephemeral",
+                _ => null
+            };
+
             // Generate keypair only if we need encryption
             // If explicitly requesting plain, don't generate keys
             // If no encryption specified, generate keys (server will decide based on policy)
@@ -109,6 +117,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 EmailAddress = options?.EmailAddress,
                 EmailAuth = options?.EmailAuth,
                 Encryption = encryptionParam,
+                Persistence = persistenceParam,
                 SpamAnalysis = options?.SpamAnalysis,
                 Chaos = options?.Chaos?.ToRequest()
             };
@@ -149,6 +158,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                     response.ExpiresAt,
                     response.InboxHash,
                     response.EmailAuth,
+                    response.Persistent,
                     response.ServerSigPk,
                     keyPair,
                     _apiClient,
@@ -165,6 +175,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                     response.ExpiresAt,
                     response.InboxHash,
                     response.EmailAuth,
+                    response.Persistent,
                     _apiClient,
                     strategy,
                     _options,
@@ -282,6 +293,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 export.ExpiresAt,
                 export.InboxHash,
                 export.EmailAuth,
+                export.Persistent,
                 _apiClient,
                 strategy,
                 _options,
@@ -343,6 +355,7 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
             export.ExpiresAt,
             export.InboxHash,
             export.EmailAuth,
+            export.Persistent,
             export.ServerSigPk,
             keyPair,
             _apiClient,
@@ -394,6 +407,8 @@ public sealed class VaultSandboxClient : IVaultSandboxClient
                 SseConsole = response.SseConsole,
                 AllowedDomains = response.AllowedDomains,
                 EncryptionPolicy = response.EncryptionPolicy,
+                PersistencePolicy = response.PersistencePolicy,
+                PersistentGlobalWebhooks = response.PersistentGlobalWebhooks,
                 SpamAnalysisEnabled = response.SpamAnalysisEnabled,
                 ChaosEnabled = response.ChaosEnabled
             };

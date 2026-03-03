@@ -41,6 +41,7 @@ internal sealed class Inbox : IInbox
     public DateTimeOffset ExpiresAt { get; }
     public string InboxHash { get; }
     public bool Encrypted { get; }
+    public bool Persistent { get; }
     public bool EmailAuth { get; }
     public bool IsDisposed { get; private set; }
 
@@ -52,6 +53,7 @@ internal sealed class Inbox : IInbox
         DateTimeOffset expiresAt,
         string inboxHash,
         bool emailAuth,
+        bool persistent,
         string serverSigPk,
         MlKemKeyPair keyPair,
         IVaultSandboxApiClient apiClient,
@@ -64,6 +66,7 @@ internal sealed class Inbox : IInbox
         ExpiresAt = expiresAt;
         InboxHash = inboxHash;
         Encrypted = true;
+        Persistent = persistent;
         EmailAuth = emailAuth;
         _serverSigPk = serverSigPk;
         _keyPair = keyPair;
@@ -84,6 +87,7 @@ internal sealed class Inbox : IInbox
         DateTimeOffset expiresAt,
         string inboxHash,
         bool emailAuth,
+        bool persistent,
         IVaultSandboxApiClient apiClient,
         IDeliveryStrategy deliveryStrategy,
         VaultSandboxClientOptions options,
@@ -93,6 +97,7 @@ internal sealed class Inbox : IInbox
         ExpiresAt = expiresAt;
         InboxHash = inboxHash;
         Encrypted = false;
+        Persistent = persistent;
         EmailAuth = emailAuth;
         _serverSigPk = null;
         _keyPair = null;
@@ -271,6 +276,7 @@ internal sealed class Inbox : IInbox
             ExpiresAt = ExpiresAt,
             InboxHash = InboxHash,
             Encrypted = Encrypted,
+            Persistent = Persistent,
             EmailAuth = EmailAuth,
             ServerSigPk = _serverSigPk,
             SecretKey = _keyPair is not null ? Base64Url.Encode(_keyPair.SecretKey) : null,

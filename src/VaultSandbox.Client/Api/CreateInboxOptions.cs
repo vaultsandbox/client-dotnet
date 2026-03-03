@@ -40,6 +40,13 @@ public sealed class CreateInboxOptions
     public bool? SpamAnalysis { get; set; }
 
     /// <summary>
+    /// Requested persistence mode for the inbox.
+    /// If not specified, the server uses its default based on the persistence policy.
+    /// Only applicable when the server policy allows overrides ('enabled' or 'disabled').
+    /// </summary>
+    public InboxPersistence? Persistence { get; set; }
+
+    /// <summary>
     /// Optional chaos configuration to enable chaos engineering for this inbox.
     /// Requires chaos to be enabled globally on the server.
     /// </summary>
@@ -60,4 +67,20 @@ public enum InboxEncryption
     /// Request a plain inbox (emails are stored unencrypted).
     /// </summary>
     Plain
+}
+
+/// <summary>
+/// Persistence mode options for inbox creation.
+/// </summary>
+public enum InboxPersistence
+{
+    /// <summary>
+    /// Request a persistent inbox (emails survive server restarts).
+    /// </summary>
+    Persistent,
+
+    /// <summary>
+    /// Request an ephemeral inbox (emails stored in memory only).
+    /// </summary>
+    Ephemeral
 }
